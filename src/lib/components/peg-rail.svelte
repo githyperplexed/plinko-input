@@ -1,7 +1,15 @@
 <script lang="ts">
+	import { clampStageWidth, stageOffset } from "$lib/physics";
 	import { pegs } from "$lib/stores/pegs.svelte";
 
-	const sides = ["left", "right"] as const;
+	let innerWidth = $state(0);
+	// handles sit at the edges of the (capped, centered) play area
+	const stageX = $derived(stageOffset(innerWidth));
+	const stageW = $derived(clampStageWidth(innerWidth));
+	const handles = $derived([
+		{ left: stageX, tx: "0", round: "rounded-r" }, // left edge, protrudes right
+		{ left: stageX + stageW, tx: "-100%", round: "rounded-l" } // right edge, protrudes left
+	]);
 
 	const onDown = (e: PointerEvent) => {
 		e.preventDefault(); // no text selection / native drag
@@ -22,16 +30,15 @@
 	};
 </script>
 
-<svelte:window onpointermove={onMove} onpointerup={onUp} />
+<svelte:window bind:innerWidth onpointermove={onMove} onpointerup={onUp} />
 
-{#each sides as side}
+{#each handles as h}
 	<button
 		aria-label="Drag the plinko row"
-		class="fixed z-20 flex h-10 w-3 -translate-y-1/2 touch-none flex-col items-center justify-center gap-1 bg-neutral-400
-			{side === 'left' ? 'left-0 rounded-r' : 'right-0 rounded-l'}"
+		class="fixed z-20 flex h-10 w-3 touch-none flex-col items-center justify-center gap-1 bg-neutral-400 {h.round}"
 		class:cursor-grab={!pegs.dragging}
 		class:cursor-grabbing={pegs.dragging}
-		style="top: {pegs.y}px"
+		style="left: {h.left}px; top: {pegs.y}px; transform: translate({h.tx}, -50%)"
 		onpointerdown={onDown}
 	>
 		<!-- grip dots -->

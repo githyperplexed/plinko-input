@@ -5,6 +5,7 @@
 		aimAngle,
 		CANNON_BASE_RATIO,
 		cannonLength,
+		clampStageWidth,
 		createBall,
 		createWorld,
 		FIXED_DT,
@@ -12,6 +13,7 @@
 		muzzle,
 		predictPath,
 		railRange,
+		stageOffset,
 		stepAll,
 		type Ball,
 		type World
@@ -30,8 +32,16 @@
 	const TRAJECTORY_ALPHA = 0.55;
 	const TRAJECTORY_DASH_SPEED = 12; // px/sec the dots pan toward the target
 	const PEG_LINE = "rgba(255, 255, 255, 0.3)";
+	const EDGE_LINE = "rgba(255, 255, 255, 0.2)"; // light gray border at the stage edges
 
 	let canvas: HTMLCanvasElement;
+
+	// the light gray borders marking the left/right edges of the (capped) play area
+	const drawEdges = (ctx: CanvasRenderingContext2D, world: World): void => {
+		ctx.fillStyle = EDGE_LINE;
+		ctx.fillRect(0, 0, 2, world.height);
+		ctx.fillRect(world.width - 2, 0, 2, world.height);
+	};
 
 	// red aim preview: the deterministic path a ball fired now would trace through
 	// its first 3 bounces, as marching dots that fade out near the end
@@ -133,25 +143,30 @@
 	$effect(() => {
 		const ctx = canvas.getContext("2d")!;
 		let world!: World;
+		let stageX = 0; // left offset of the centered play area within the window
 
-		// Match the canvas to the viewport and the device pixel ratio so the
-		// drawing stays crisp, then rebuild the cup geometry for the new size.
+		// Size/position the canvas to the (width-capped, centered) play area and
+		// the device pixel ratio so the drawing stays crisp, then rebuild the cup
+		// geometry for the new size.
 		const resize = (): void => {
 			const dpr = window.devicePixelRatio || 1;
-			const w = window.innerWidth;
 			const h = window.innerHeight;
-			canvas.width = w * dpr;
+			const sw = clampStageWidth(window.innerWidth);
+			stageX = stageOffset(window.innerWidth);
+			canvas.width = sw * dpr;
 			canvas.height = h * dpr;
-			canvas.style.width = `${w}px`;
+			canvas.style.width = `${sw}px`;
 			canvas.style.height = `${h}px`;
+			canvas.style.left = `${stageX}px`;
 			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 			// when a breakpoint is crossed, swap the value set (board rebuilds below)
 			// and pick a fresh target — but keep the balls and progress in play
-			if (syncCharset(w)) newTarget();
-			world = createWorld(w, h, charset.values);
-			// cannon pan position: center on first run, otherwise keep it on-screen
+			if (syncCharset(sw)) newTarget();
+			world = createWorld(sw, h, charset.values);
+			// cannon pan position: center on first run, otherwise keep it on-stage
 			const margin = world.cupWidth * CANNON_BASE_RATIO;
-			apparatus.x = apparatus.x === 0 ? w / 2 : Math.min(Math.max(apparatus.x, margin), w - margin);
+			apparatus.x =
+				apparatus.x === 0 ? sw / 2 : Math.min(Math.max(apparatus.x, margin), sw - margin);
 			// snap the rebuilt pegs to the rail's current spot so the next frame
 			// doesn't sweep them up from the default position
 			if (pegs.y > 0) for (const o of world.obstacles) o.center.y = pegs.y;
@@ -159,7 +174,7 @@
 			// height shrink moves the floor up, and any ball left below it would
 			// fall off-screen and vanish.
 			for (const ball of balls) {
-				ball.pos.x = Math.max(ball.radius, Math.min(w - ball.radius, ball.pos.x));
+				ball.pos.x = Math.max(ball.radius, Math.min(sw - ball.radius, ball.pos.x));
 				ball.pos.y = Math.max(ball.radius, Math.min(h - ball.radius, ball.pos.y));
 				ball.resting = false; // re-settle into moved cups
 			}
@@ -209,6 +224,7 @@
 			drawTrajectory(ctx, world, time);
 			drawLetters(ctx, world);
 			for (const ball of balls) drawBall(ctx, ball);
+			drawEdges(ctx, world);
 
 			raf = requestAnimationFrame(frame);
 		};
@@ -229,23 +245,24 @@
 		// cannon/handles/buttons above it keep their own gestures; move/up are on
 		// the window so a drag continues off the canvas.
 		let aiming = false;
+		const stageX2 = (clientX: number): number => clientX - stageX; // window → stage coords
 		const onPointerDown = (e: PointerEvent): void => {
 			aiming = true;
-			apparatus.angle = aimAngle(e.clientX, e.clientY, apparatus.x);
+			apparatus.angle = aimAngle(stageX2(e.clientX), e.clientY, apparatus.x);
 		};
 		const onPointerMove = (e: PointerEvent): void => {
 			if (aiming) {
-				apparatus.angle = aimAngle(e.clientX, e.clientY, apparatus.x);
+				apparatus.angle = aimAngle(stageX2(e.clientX), e.clientY, apparatus.x);
 			} else if (!pegs.dragging) {
 				const margin = world.cupWidth * CANNON_BASE_RATIO;
-				apparatus.x = Math.min(Math.max(e.clientX, margin), world.width - margin);
+				apparatus.x = Math.min(Math.max(stageX2(e.clientX), margin), world.width - margin);
 				apparatus.angle = 0;
 			}
 		};
 		const onPointerUp = (e: PointerEvent): void => {
 			if (!aiming) return;
 			aiming = false;
-			apparatus.angle = aimAngle(e.clientX, e.clientY, apparatus.x);
+			apparatus.angle = aimAngle(stageX2(e.clientX), e.clientY, apparatus.x);
 			fire();
 			apparatus.angle = 0; // back to straight-down while panning resumes
 		};
@@ -265,4 +282,5 @@
 	});
 </script>
 
-<canvas bind:this={canvas} class="fixed inset-0"></canvas>
+<!-- the canvas IS the play area: width-capped and centered (left/size set in resize) -->
+<canvas bind:this={canvas} class="fixed top-0 left-0"></canvas>

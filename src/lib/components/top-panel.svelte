@@ -1,13 +1,21 @@
 <script lang="ts">
-	import { CANNON_BASE_RATIO, CANNON_LENGTH_RATIO, CANNON_WIDTH_RATIO } from "$lib/physics";
+	import {
+		CANNON_BASE_RATIO,
+		CANNON_LENGTH_RATIO,
+		CANNON_WIDTH_RATIO,
+		clampStageWidth,
+		stageOffset
+	} from "$lib/physics";
 	import { apparatus } from "$lib/stores/apparatus.svelte";
 	import { charset } from "$lib/stores/charset.svelte";
 
 	let innerWidth = $state(0);
 
-	// every dimension is a ratio of one cup width, so the cannon keeps its
-	// proportions at any size; the pivot is the top-center of the screen
-	const cupWidth = $derived(innerWidth / charset.values.length);
+	// sizing keys off the capped, centered play area; apparatus.x is stage-local,
+	// so the on-screen pivot is the stage offset + apparatus.x
+	const stageW = $derived(clampStageWidth(innerWidth));
+	const stageX = $derived(stageOffset(innerWidth));
+	const cupWidth = $derived(stageW / charset.values.length);
 	const baseRadius = $derived(cupWidth * CANNON_BASE_RATIO);
 	const length = $derived(cupWidth * CANNON_LENGTH_RATIO);
 	const barrelWidth = $derived(cupWidth * CANNON_WIDTH_RATIO);
@@ -18,9 +26,9 @@
 
 <svelte:window bind:innerWidth />
 
-<!-- pivot point: pans across the top at apparatus.x; purely visual, so it never
-	blocks the aim press (which is read off the canvas underneath) -->
-<div class="pointer-events-none fixed top-0 z-10" style="left: {apparatus.x}px">
+<!-- pivot: pans across the top at the stage offset + apparatus.x; purely visual,
+	so it never blocks the aim press (which is read off the canvas underneath) -->
+<div class="pointer-events-none fixed top-0 z-10" style="left: {stageX + apparatus.x}px">
 	<!-- barrel: hangs from the pivot and swings toward the aim -->
 	<div
 		class="absolute top-0 left-0 bg-white"

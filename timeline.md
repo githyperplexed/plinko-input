@@ -89,6 +89,21 @@ of decisions rather than every micro-edit.
 - Known gap: panning relies on mouse hover, so **touch can't pan** before
   pressing (no hover events) — a press aims from the cannon's last spot.
 
+## 10. Width-capped stage (replaces the apparatus guard)
+
+- Bug: fast resizes triggered a false **"screen too small"** that then stuck,
+  even after resizing back. **Root cause:** the apparatus-vs-rail geometric
+  check keyed off the charset count, which goes stale while the scene is
+  unmounted — once tripped it stayed tripped.
+- **Decision:** drop that check entirely and instead **cap the play area to
+  2560px wide, centered**, with a light-gray border on each edge. Capping bounds
+  `cupWidth`/cannon size, so the ultra-wide "cannon dips below the rail" exploit
+  can't happen — which makes the plain `width < 360 || height < 500` check the
+  only "too small" guard needed (and it uses live values, so it can't stick).
+- The canvas itself is the stage (sized to `min(innerWidth, 2560)`, offset to
+  center); pointer math, the cannon position, and the peg-rail handles are all
+  shifted by the stage offset. Tunable: `STAGE_MAX_WIDTH`.
+
 ---
 
 **Throughline:** most decisions chased **"skill, not luck"** (fixed-width slots,

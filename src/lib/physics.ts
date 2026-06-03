@@ -419,17 +419,15 @@ export const muzzle = (pivotX: number, cupWidth: number, angle: number): Vec => 
 export const launchVelocity = (angle: number): Vec =>
 	v(Math.sin(angle) * LAUNCH_SPEED, Math.cos(angle) * LAUNCH_SPEED);
 
-// True when the cannon's straight-down reach meets the top edge of the rail
-// handle at the rail's highest position (plus a margin) — no room to keep the
-// cannon above the rail, so a ball could be dropped beneath it: "too small".
-export const apparatusMeetsRail = (width: number, height: number, letters: string[]): boolean => {
-	const cupWidth = width / letters.length;
-	const domeRadius = domeRadiusFor(cupWidth);
-	const letterY = height - domeRadius - LETTER_DROP;
-	const reach = cannonLength(cupWidth); // lowest the muzzle can get (straight down)
-	const { highest } = railRange(letterY, domeRadius, reach);
-	return reach >= highest - RAIL_HANDLE_HEIGHT / 2 - APPARATUS_RAIL_GAP;
-};
+// The play area is capped to a max width and centered; beyond it the screen
+// shows margins (with a light border). Capping keeps cups/cannon a sane size on
+// ultra-wide setups, so the plain width/height checks are all the "too small"
+// guard we need.
+export const STAGE_MAX_WIDTH = 2560;
+export const clampStageWidth = (windowWidth: number): number =>
+	Math.min(windowWidth, STAGE_MAX_WIDTH);
+export const stageOffset = (windowWidth: number): number =>
+	(windowWidth - clampStageWidth(windowWidth)) / 2;
 
 // Build the row of domes plus the screen edges for a given viewport size, one
 // cup per value in `letters`. Domes sit on each divider; the fixed-width slot
