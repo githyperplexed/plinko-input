@@ -371,11 +371,13 @@
 		let aiming = false;
 		const stageX2 = (clientX: number): number => clientX - stageX; // window → stage coords
 
-		// topmost resting ball under a stage-space point (later balls draw on top)
-		const restingBallAt = (sx: number, sy: number): Ball | null => {
+		// topmost resting ball under a stage-space point (later balls draw on top).
+		// `slop` pads the hit radius — a fingertip needs a far bigger target than a
+		// mouse cursor, so touch presses get a generous one (see onPointerDown).
+		const restingBallAt = (sx: number, sy: number, slop = 2): Ball | null => {
 			for (let k = balls.length - 1; k >= 0; k--) {
 				const b = balls[k];
-				if (b.resting && Math.hypot(b.pos.x - sx, b.pos.y - sy) <= b.radius + 2) return b;
+				if (b.resting && Math.hypot(b.pos.x - sx, b.pos.y - sy) <= b.radius + slop) return b;
 			}
 			return null;
 		};
@@ -383,8 +385,10 @@
 		const onPointerDown = (e: PointerEvent): void => {
 			// win/lose screens have no manual release or aiming — only panning (which
 			// happens on move). During play: click a resting ball to remove it, else aim.
-			if (game.status !== "playing") return;
-			const hit = restingBallAt(stageX2(e.clientX), e.clientY);
+			if (game.status !== "playing" || apparatus.panning) return;
+			// fingertips are imprecise, so touch gets a much larger tap target than a mouse
+			const slop = e.pointerType === "touch" ? 16 : 2;
+			const hit = restingBallAt(stageX2(e.clientX), e.clientY, slop);
 			if (hit) {
 				removeBall(hit);
 				hover.slot = -1;
@@ -399,7 +403,8 @@
 				apparatus.angle = aimAngle(stageX2(e.clientX), e.clientY, apparatus.x);
 				return;
 			}
-			if (pegs.dragging) return;
+			// the top-panel owns the cannon while it's being grabbed — don't hover-pan over it
+			if (pegs.dragging || apparatus.panning) return;
 			const sx = stageX2(e.clientX);
 			if (game.status === "playing") {
 				// hover a resting ball → highlight the input it owns
@@ -419,11 +424,19 @@
 			fire();
 			apparatus.angle = 0; // back to straight-down while panning resumes
 		};
+		// a gesture the browser/OS takes over (second finger, system swipe) cancels
+		// the aim without firing — just drop back to idle so the cannon isn't stuck
+		const onPointerCancel = (): void => {
+			if (!aiming) return;
+			aiming = false;
+			apparatus.angle = 0;
+		};
 
 		window.addEventListener("resize", resize);
 		canvas.addEventListener("pointerdown", onPointerDown);
 		window.addEventListener("pointermove", onPointerMove);
 		window.addEventListener("pointerup", onPointerUp);
+		window.addEventListener("pointercancel", onPointerCancel);
 
 		return () => {
 			cancelAnimationFrame(raf);
@@ -431,9 +444,12 @@
 			canvas.removeEventListener("pointerdown", onPointerDown);
 			window.removeEventListener("pointermove", onPointerMove);
 			window.removeEventListener("pointerup", onPointerUp);
+			window.removeEventListener("pointercancel", onPointerCancel);
 		};
 	});
 </script>
 
-<!-- the canvas IS the play area: width-capped and centered (left/size set in resize) -->
-<canvas bind:this={canvas} class="fixed top-0 left-0"></canvas>
+<!-- the canvas IS the play area: width-capped and centered (left/size set in resize).
+	 touch-none stops the browser from claiming a press-drag as a scroll/zoom gesture
+	 (which would fire pointercancel and kill the aim drag on touch devices) -->
+<canvas bind:this={canvas} class="fixed top-0 left-0 touch-none"></canvas>
