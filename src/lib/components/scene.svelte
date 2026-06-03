@@ -52,9 +52,10 @@
 		ctx.fillStyle = EDGE_LINE;
 		ctx.fillRect(0, 0, 2, world.height);
 		ctx.fillRect(world.width - 2, 0, 2, world.height);
-		// on touch the floor is raised to make room for the Fire button; close off
-		// the play area with a matching border along the bottom, above the button
-		if (touch.coarse) ctx.fillRect(0, world.height - 2, world.width, 2);
+		// during play on touch the floor is raised to make room for the Fire button;
+		// close off the play area with a matching border along the bottom, above it
+		if (touch.coarse && game.status === "playing")
+			ctx.fillRect(0, world.height - 2, world.width, 2);
 	};
 
 	// red aim preview: the deterministic path a ball fired now would trace through
@@ -218,8 +219,11 @@
 			const dpr = window.devicePixelRatio || 1;
 			// on touch, reserve a bottom band for the Fire button by raising the floor:
 			// the play area is the window minus that band, so the button sits isolated
-			// below the cups (createWorld derives the whole board from this height)
-			const h = window.innerHeight - (touch.coarse ? FIRE_BAR_HEIGHT : 0);
+			// below the cups (createWorld derives the whole board from this height). The
+			// band only exists while the bar does — during play — so the win/lose screens
+			// (no bar) use the full height with no empty gap.
+			const h =
+				window.innerHeight - (touch.coarse && game.status === "playing" ? FIRE_BAR_HEIGHT : 0);
 			const sw = clampStageWidth(window.innerWidth);
 			stageX = stageOffset(window.innerWidth);
 			canvas.width = sw * dpr;
@@ -252,10 +256,12 @@
 		// untracked so this render effect doesn't re-run when the charset swaps —
 		// the resize handler already rebuilds the world on a crossing
 		untrack(resize);
-		// re-lay out if the device's touch capability flips (mouse plugged in,
-		// devtools emulation toggled) so the reserved Fire-button band appears/clears
+		// re-lay out when the reserved Fire-button band should appear or clear: the
+		// device's touch capability flips (mouse plugged in, devtools emulation), or
+		// the game leaves/enters play (the band only exists during play)
 		$effect(() => {
 			touch.coarse;
+			game.status;
 			untrack(resize);
 		});
 
@@ -382,7 +388,14 @@
 		// cannon/handles/buttons above it keep their own gestures; move/up are on
 		// the window so a drag continues off the canvas.
 		let aiming = false;
+		let panningCanvas = false; // touch-only: dragging the win/lose canvas steers the cannon
 		const stageX2 = (clientX: number): number => clientX - stageX; // window → stage coords
+
+		// move the cannon's pivot to a window x, clamped to keep the base on-stage
+		const panTo = (clientX: number): void => {
+			const margin = world.cupWidth * CANNON_BASE_RATIO;
+			apparatus.x = Math.min(Math.max(stageX2(clientX), margin), world.width - margin);
+		};
 
 		// topmost resting ball under a stage-space point (later balls draw on top).
 		// `slop` pads the hit radius — a fingertip needs a far bigger target than a
@@ -396,9 +409,19 @@
 		};
 
 		const onPointerDown = (e: PointerEvent): void => {
-			// win/lose screens have no manual release or aiming — only panning (which
-			// happens on move). During play: click a resting ball to remove it, else aim.
-			if (game.status !== "playing" || apparatus.panning) return;
+			if (apparatus.panning) return; // the top-panel grab handle owns the cannon
+			// win/lose: no aiming — on touch a press-drag steers the cannon left/right (no
+			// angle change). Desktop is untouched: the mouse already pans on hover, so a
+			// mouse press here stays a no-op, exactly as before.
+			if (game.status !== "playing") {
+				if (e.pointerType !== "mouse") {
+					panningCanvas = true;
+					panTo(e.clientX);
+				}
+				return;
+			}
+			// During play: click a resting ball to remove it, else aim.
+			// fingertips are imprecise, so touch gets a much larger tap target than a mouse
 			// fingertips are imprecise, so touch gets a much larger tap target than a mouse
 			const slop = e.pointerType === "touch" ? 16 : 2;
 			const hit = restingBallAt(stageX2(e.clientX), e.clientY, slop);
@@ -412,6 +435,10 @@
 			apparatus.angle = aimAngle(stageX2(e.clientX), e.clientY, apparatus.x);
 		};
 		const onPointerMove = (e: PointerEvent): void => {
+			if (panningCanvas) {
+				panTo(e.clientX); // win/lose: steer the cannon, no angle change
+				return;
+			}
 			if (aiming) {
 				apparatus.angle = aimAngle(stageX2(e.clientX), e.clientY, apparatus.x);
 				return;
@@ -434,6 +461,10 @@
 			apparatus.angle = 0;
 		};
 		const onPointerUp = (e: PointerEvent): void => {
+			if (panningCanvas) {
+				panningCanvas = false;
+				return;
+			}
 			if (!aiming) return;
 			aiming = false;
 			// Touch decouples aim from fire and keeps the aim from the last drag move:
@@ -448,6 +479,7 @@
 		// a gesture the browser/OS takes over (second finger, system swipe) cancels
 		// the aim without firing — just drop back to idle so the cannon isn't stuck
 		const onPointerCancel = (): void => {
+			panningCanvas = false;
 			if (!aiming) return;
 			aiming = false;
 			apparatus.angle = 0;
