@@ -365,6 +365,32 @@ export const predictPath = (
 	return path;
 };
 
+// Which cup index an x-position falls in (clamped to the row).
+export const cupIndexAt = (world: World, x: number): number =>
+	clamp(Math.floor(x / world.cupWidth), 0, world.cups.length - 1);
+
+// Simulate a lone ghost ball from (x, y) all the way to rest and return the cup
+// index it settles in. Reuses the real step + settle logic, so it matches an
+// actual drop onto an *empty* board — balls already in play are deliberately
+// ignored (reading around them is the player's skill). Pegs are held where they
+// are now. Used to color the aim preview and glow the target slot.
+export const predictLanding = (
+	world: World,
+	x: number,
+	y: number,
+	vx: number,
+	vy: number
+): number | null => {
+	const ghost = createBall(x, y, vx, vy);
+	const ghosts = [ghost];
+	const pegY = world.obstacles.length ? world.obstacles[0].center.y : 0;
+	for (let step = 0; step < 600; step++) {
+		stepAll(ghosts, world, FIXED_DT, pegY, pegY);
+		if (ghost.resting) return cupIndexAt(world, ghost.pos.x);
+	}
+	return null;
+};
+
 // --- construction -----------------------------------------------------------
 
 export const createBall = (x: number, y: number, vx = 0, vy = 0, radius = BALL_RADIUS): Ball => ({

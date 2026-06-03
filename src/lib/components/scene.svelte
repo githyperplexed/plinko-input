@@ -11,6 +11,7 @@
 		FIXED_DT,
 		launchVelocity,
 		muzzle,
+		predictLanding,
 		predictPath,
 		railRange,
 		stageOffset,
@@ -19,16 +20,19 @@
 		type World
 	} from "$lib/physics";
 	import { apparatus } from "$lib/stores/apparatus.svelte";
-	import { balls } from "$lib/stores/balls";
+	import { addBall, balls, nextSlot, projectEntered, removeBall, slotFor } from "$lib/stores/balls";
 	import { charset, syncCharset } from "$lib/stores/charset.svelte";
 	import { game, newTarget, PIN_LENGTH } from "$lib/stores/game.svelte";
+	import { hover } from "$lib/stores/hover.svelte";
 	import { pegs } from "$lib/stores/pegs.svelte";
 
 	const DOME_FILL = "#fff";
 	const OBSTACLE_FILL = "#fff";
 	const LETTER_FILL = "rgba(255, 255, 255, 0.7)";
+	const LETTER_GREEN = "rgba(74, 222, 128, 0.95)"; // the target letter when the aim is on it
 	const BALL_FILL = "#e5e5e5";
 	const TRAJECTORY_RGB = "255, 70, 70";
+	const TRAJECTORY_GREEN = "74, 222, 128"; // preview + slot go green when the shot lands on target
 	const TRAJECTORY_ALPHA = 0.55;
 	const TRAJECTORY_DASH_SPEED = 12; // px/sec the dots pan toward the target
 	const PEG_LINE = "rgba(255, 255, 255, 0.3)";
@@ -45,7 +49,13 @@
 
 	// red aim preview: the deterministic path a ball fired now would trace through
 	// its first 3 bounces, as marching dots that fade out near the end
-	const drawTrajectory = (ctx: CanvasRenderingContext2D, world: World, time: number): void => {
+	const drawTrajectory = (
+		ctx: CanvasRenderingContext2D,
+		world: World,
+		time: number,
+		correct: boolean
+	): void => {
+		const rgb = correct ? TRAJECTORY_GREEN : TRAJECTORY_RGB;
 		const m = muzzle(apparatus.x, world.cupWidth, apparatus.angle);
 		const vel = launchVelocity(apparatus.angle);
 		const path = predictPath(world, m.x, m.y, vel.x, vel.y, 3);
@@ -68,7 +78,7 @@
 		for (let i = 1; i < path.length; i++) {
 			const mid = (dist[i - 1] + dist[i]) / 2;
 			const fade = mid <= fadeStart ? 1 : Math.max(0, 1 - (mid - fadeStart) / (total - fadeStart));
-			ctx.strokeStyle = `rgba(${TRAJECTORY_RGB}, ${TRAJECTORY_ALPHA * fade})`;
+			ctx.strokeStyle = `rgba(${rgb}, ${TRAJECTORY_ALPHA * fade})`;
 			ctx.lineDashOffset = dist[i - 1] - march; // continuous pattern, panning toward target
 			ctx.beginPath();
 			ctx.moveTo(path[i - 1].x, path[i - 1].y);
@@ -86,6 +96,27 @@
 			ctx.arc(dome.center.x, dome.center.y, dome.radius, Math.PI, 0, false);
 			ctx.fill();
 		}
+	};
+
+	// a soft green glow rising out of the target slot when the current aim would
+	// land the ball there — drawn under the domes so it reads as light coming up
+	// through the slot opening, with a gentle breathing pulse
+	const drawSlotGlow = (
+		ctx: CanvasRenderingContext2D,
+		world: World,
+		centerX: number,
+		time: number
+	): void => {
+		const cy = world.height; // the floor — glow rises up out of the slot opening
+		const r = world.domeRadius * 1.3; // concentrated to the opening, not the whole cup
+		const pulse = 0.16 + 0.06 * Math.sin(time / 350);
+		const g = ctx.createRadialGradient(centerX, cy, 0, centerX, cy, r);
+		g.addColorStop(0, `rgba(${TRAJECTORY_GREEN}, ${pulse})`);
+		g.addColorStop(1, `rgba(${TRAJECTORY_GREEN}, 0)`);
+		ctx.fillStyle = g;
+		ctx.beginPath();
+		ctx.arc(centerX, cy, r, 0, Math.PI * 2);
+		ctx.fill();
 	};
 
 	// the draggable plinko row: a thin gray line spanning the screen (to the edge
@@ -123,12 +154,12 @@
 	};
 
 	// the letters sit in the catch slots between the domes
-	const drawLetters = (ctx: CanvasRenderingContext2D, world: World): void => {
-		ctx.fillStyle = LETTER_FILL;
+	const drawLetters = (ctx: CanvasRenderingContext2D, world: World, glowX: number | null): void => {
 		ctx.font = "14px system-ui, sans-serif";
 		ctx.textAlign = "center";
 		ctx.textBaseline = "middle";
 		for (const cup of world.cups) {
+			ctx.fillStyle = cup.centerX === glowX ? LETTER_GREEN : LETTER_FILL;
 			ctx.fillText(cup.letter, cup.centerX, world.letterY);
 		}
 	};
@@ -207,22 +238,37 @@
 				stepAll(balls, world, FIXED_DT, pegFromY, pegs.y);
 				acc -= FIXED_DT;
 			}
-			// Project each ball onto its pin input by drop order: input i shows
-			// ball i's current resting slot (or "" while it's still moving). Done
-			// live, so a ball that re-settles in a new slot — even from a resize
-			// bump — updates its own input, without changing which input it owns.
+			// Project each resting ball onto the pin input it owns. Done live, so a
+			// ball that re-settles in a new slot — from a resize bump, or after a
+			// removal wakes the pile — updates its own input without changing which
+			// input it owns. `game.dropped` is the slot the *next* ball will fill (a
+			// freed one if you've removed a ball), or PIN_LENGTH when full.
+			const entered = projectEntered(PIN_LENGTH, slotLetterAt);
 			for (let i = 0; i < PIN_LENGTH; i++) {
-				const ball = balls[i];
-				const letter = ball && ball.resting ? slotLetterAt(ball.pos.x) : "";
-				if (game.entered[i] !== letter) game.entered[i] = letter;
+				if (game.entered[i] !== entered[i]) game.entered[i] = entered[i];
 			}
-			if (game.dropped !== balls.length) game.dropped = balls.length;
+			const next = nextSlot(PIN_LENGTH) ?? PIN_LENGTH;
+			if (game.dropped !== next) game.dropped = next;
+
+			// Predicted landing for the current aim (lone ball, empty board). When it
+			// matches the next required letter, the preview goes green and the target
+			// slot glows — turning aiming into a deterministic, readable skill.
+			let glowX: number | null = null;
+			if (game.status === "playing" && game.dropped < PIN_LENGTH) {
+				const m = muzzle(apparatus.x, world.cupWidth, apparatus.angle);
+				const vel = launchVelocity(apparatus.angle);
+				const idx = predictLanding(world, m.x, m.y, vel.x, vel.y);
+				if (idx !== null && world.cups[idx].letter === game.target[game.dropped]) {
+					glowX = world.cups[idx].centerX;
+				}
+			}
 
 			ctx.clearRect(0, 0, world.width, world.height);
+			if (glowX !== null) drawSlotGlow(ctx, world, glowX, time);
 			drawDomes(ctx, world);
 			drawPegRow(ctx, world);
-			drawTrajectory(ctx, world, time);
-			drawLetters(ctx, world);
+			drawTrajectory(ctx, world, time, glowX !== null);
+			drawLetters(ctx, world, glowX);
 			for (const ball of balls) drawBall(ctx, ball);
 			drawEdges(ctx, world);
 
@@ -233,10 +279,9 @@
 		// fire a ball from the muzzle along the current aim
 		const fire = (): void => {
 			if (game.status !== "playing") return;
-			if (balls.length >= PIN_LENGTH) return; // only as many balls as pin slots
 			const m = muzzle(apparatus.x, world.cupWidth, apparatus.angle);
 			const vel = launchVelocity(apparatus.angle);
-			balls.push(createBall(m.x, m.y, vel.x, vel.y));
+			addBall(createBall(m.x, m.y, vel.x, vel.y), PIN_LENGTH); // no-op when full
 		};
 
 		// Pan + aim: while idle the cannon pans to follow the pointer (angle 0). On
@@ -246,18 +291,42 @@
 		// the window so a drag continues off the canvas.
 		let aiming = false;
 		const stageX2 = (clientX: number): number => clientX - stageX; // window → stage coords
+
+		// topmost resting ball under a stage-space point (later balls draw on top)
+		const restingBallAt = (sx: number, sy: number): Ball | null => {
+			for (let k = balls.length - 1; k >= 0; k--) {
+				const b = balls[k];
+				if (b.resting && Math.hypot(b.pos.x - sx, b.pos.y - sy) <= b.radius + 2) return b;
+			}
+			return null;
+		};
+
 		const onPointerDown = (e: PointerEvent): void => {
+			// click a resting ball to remove it (and free its input slot) — no aiming
+			const hit = restingBallAt(stageX2(e.clientX), e.clientY);
+			if (hit) {
+				removeBall(hit);
+				hover.slot = -1;
+				return;
+			}
 			aiming = true;
+			hover.slot = -1;
 			apparatus.angle = aimAngle(stageX2(e.clientX), e.clientY, apparatus.x);
 		};
 		const onPointerMove = (e: PointerEvent): void => {
 			if (aiming) {
 				apparatus.angle = aimAngle(stageX2(e.clientX), e.clientY, apparatus.x);
-			} else if (!pegs.dragging) {
-				const margin = world.cupWidth * CANNON_BASE_RATIO;
-				apparatus.x = Math.min(Math.max(stageX2(e.clientX), margin), world.width - margin);
-				apparatus.angle = 0;
+				return;
 			}
+			if (pegs.dragging) return;
+			// hover a resting ball → highlight the input it owns; else pan the cannon
+			const sx = stageX2(e.clientX);
+			const hit = restingBallAt(sx, e.clientY);
+			hover.slot = hit ? (slotFor(hit) ?? -1) : -1;
+			canvas.style.cursor = hit ? "pointer" : "";
+			const margin = world.cupWidth * CANNON_BASE_RATIO;
+			apparatus.x = Math.min(Math.max(sx, margin), world.width - margin);
+			apparatus.angle = 0;
 		};
 		const onPointerUp = (e: PointerEvent): void => {
 			if (!aiming) return;

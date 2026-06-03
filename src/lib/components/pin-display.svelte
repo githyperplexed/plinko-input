@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { game, PIN_LENGTH, reset, submit } from "$lib/stores/game.svelte";
+	import { hover } from "$lib/stores/hover.svelte";
 
 	const slots = Array.from({ length: PIN_LENGTH }, (_, i) => i);
 
@@ -100,23 +101,30 @@
 		<div class="flex flex-col gap-3">
 			<div class="flex gap-3">
 				{#each slots as i}
+					{@const correct = game.entered[i] !== "" && game.entered[i] === game.target[i]}
 					<div
 						class="flex h-16 w-12 items-center justify-center rounded-xl border text-2xl font-semibold text-white transition-colors
-							{i === game.dropped ? 'border-white/60' : 'border-white/20'}"
+							{correct
+							? 'border-emerald-500/25'
+							: i === game.dropped
+								? 'border-white/60'
+								: 'border-white/20'}
+							{correct ? 'bg-emerald-500/5' : hover.slot === i ? 'bg-white/10' : ''}"
 					>
 						{game.entered[i] ?? ""}
 					</div>
 				{/each}
 
-				<!-- submit: fills solid emerald once every slot is settled -->
+				<!-- submit: looks like a faint input until every slot is settled, then
+					 fills solid white with a black arrow -->
 				<button
 					aria-label="Submit pin"
 					disabled={!ready}
 					onclick={onSubmit}
-					class="pointer-events-auto flex h-16 w-12 items-center justify-center rounded-xl border text-white transition-colors
+					class="pointer-events-auto flex h-16 w-12 items-center justify-center rounded-xl border transition-colors
 						{ready
-						? 'cursor-pointer border-emerald-500 bg-emerald-500'
-						: 'cursor-default border-emerald-500/25 bg-emerald-500/5'}"
+						? 'cursor-pointer border-white bg-white text-black'
+						: 'cursor-default border-white/20 bg-transparent text-white/30'}"
 				>
 					<svg
 						viewBox="0 0 24 24"
