@@ -36,7 +36,9 @@ export const isReady = (): boolean => game.entered.every((c) => c !== "");
 
 export const submit = (): void => {
 	if (game.status !== "playing" || !isReady()) return;
-	game.status = game.entered.join("") === game.target ? "success" : "failure";
+	const won = game.entered.join("") === game.target;
+	game.status = won ? "success" : "failure";
+	if (won) clearBalls(); // start the win-screen free-play sandbox with a clean slate
 };
 
 // Regenerate just the target — used when the value set changes at a breakpoint.

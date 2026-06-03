@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { clampStageWidth, stageOffset } from "$lib/physics";
+	import { game } from "$lib/stores/game.svelte";
 	import { pegs } from "$lib/stores/pegs.svelte";
 
 	let innerWidth = $state(0);
@@ -32,18 +33,20 @@
 
 <svelte:window bind:innerWidth onpointermove={onMove} onpointerup={onUp} />
 
-{#each handles as h}
-	<button
-		aria-label="Drag the plinko row"
-		class="fixed z-20 flex h-10 w-3 touch-none flex-col items-center justify-center gap-1 bg-neutral-400 {h.round}"
-		class:cursor-grab={!pegs.dragging}
-		class:cursor-grabbing={pegs.dragging}
-		style="left: {h.left}px; top: {pegs.y}px; transform: translate({h.tx}, -50%)"
-		onpointerdown={onDown}
-	>
-		<!-- grip dots -->
-		<span class="h-1 w-1 rounded-full bg-neutral-600"></span>
-		<span class="h-1 w-1 rounded-full bg-neutral-600"></span>
-		<span class="h-1 w-1 rounded-full bg-neutral-600"></span>
-	</button>
-{/each}
+{#if game.status === "playing"}
+	{#each handles as h}
+		<button
+			aria-label="Drag the plinko row"
+			class="fixed z-20 flex h-10 w-3 touch-none flex-col items-center justify-center gap-1 bg-neutral-400 {h.round}"
+			class:cursor-grab={!pegs.dragging}
+			class:cursor-grabbing={pegs.dragging}
+			style="left: {h.left}px; top: {pegs.y}px; transform: translate({h.tx}, -50%)"
+			onpointerdown={onDown}
+		>
+			<!-- grip dots -->
+			<span class="h-1 w-1 rounded-full bg-neutral-600"></span>
+			<span class="h-1 w-1 rounded-full bg-neutral-600"></span>
+			<span class="h-1 w-1 rounded-full bg-neutral-600"></span>
+		</button>
+	{/each}
+{/if}

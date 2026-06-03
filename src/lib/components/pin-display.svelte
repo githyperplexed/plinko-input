@@ -48,9 +48,9 @@
 		<!-- result replaces the input content in place -->
 		<div class="flex flex-col items-center gap-4">
 			{#if game.status === "success"}
-				<div class="flex flex-col items-center gap-1">
-					<span class="text-3xl font-semibold text-white">Access granted</span>
-					<span class="text-sm text-white/50">Good job</span>
+				<div class="flex flex-col items-center gap-2">
+					<span class="text-xs tracking-[0.3em] text-white/40 uppercase">Access granted</span>
+					<span class="text-2xl font-medium text-white/70">You have won nothing</span>
 				</div>
 			{:else}
 				<div class="flex flex-col items-center gap-1">
@@ -64,7 +64,7 @@
 				class="pointer-events-auto mt-2 min-w-40 cursor-pointer rounded-lg bg-white px-10 py-2 font-medium text-black"
 				onclick={choose}
 			>
-				Try again
+				Play again
 			</button>
 		</div>
 	{:else if showHint}
@@ -104,11 +104,7 @@
 					{@const correct = game.entered[i] !== "" && game.entered[i] === game.target[i]}
 					<div
 						class="flex h-16 w-12 items-center justify-center rounded-xl border text-2xl font-semibold text-white transition-colors
-							{correct
-							? 'border-emerald-500/25'
-							: i === game.dropped
-								? 'border-white/60'
-								: 'border-white/20'}
+							{correct ? 'border-emerald-500/25' : i === game.dropped ? 'border-white/60' : 'border-white/20'}
 							{correct ? 'bg-emerald-500/5' : hover.slot === i ? 'bg-white/10' : ''}"
 					>
 						{game.entered[i] ?? ""}

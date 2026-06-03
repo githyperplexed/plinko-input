@@ -69,6 +69,10 @@ export const REST_MARGIN = 4; // px from a surface to count as resting on it
 export const REST_FLATNESS = 0.7;
 
 export const BALL_RADIUS = 10;
+// Hard cap on simultaneous balls, used by the post-win free-play sandbox. The
+// only superlinear sim cost is the O(n²) ball-ball pass, so this bounds it;
+// ~150 stays smooth without spatial partitioning.
+export const MAX_BALLS = 150;
 // The catch slot between two domes, in pixels. Fixed (not derived from cup
 // width) so the difficulty is identical on every screen size. The tightest
 // fair value is roughly one ball diameter; below that the ball can't fit.
@@ -190,7 +194,13 @@ const collideObstacles = (ball: Ball, world: World, obsVel: Vec): void => {
 // bounce apex (no surface near) and on a mound's steep side (normal too tilted),
 // while still letting it settle on the floor or a near-flat spot. The normal of
 // a near surface points from that surface toward the ball center.
-const onFlatSupport = (ball: Ball, world: World, balls: Ball[], margin: number): boolean => {
+const onFlatSupport = (
+	ball: Ball,
+	world: World,
+	balls: Ball[],
+	margin: number,
+	blockers: Obstacle[] = []
+): boolean => {
 	const reach = ball.radius + margin;
 	const upward = (offset: Vec, dist: number): boolean =>
 		dist > 0 && -offset.y / dist >= REST_FLATNESS;
@@ -212,6 +222,12 @@ const onFlatSupport = (ball: Ball, world: World, balls: Ball[], margin: number):
 		const offset = sub(ball.pos, other.pos);
 		const dist = len(offset);
 		if (dist - other.radius <= reach && upward(offset, dist)) return true;
+	}
+	// blockers (e.g. resting balls fed into a prediction) are solid ground too
+	for (const o of blockers) {
+		const offset = sub(ball.pos, o.center);
+		const dist = len(offset);
+		if (dist - o.radius <= reach && upward(offset, dist)) return true;
 	}
 	return false;
 };
@@ -264,13 +280,19 @@ const collideAllPairs = (balls: Ball[]): void => {
 // Settle on stillness of *position*, not velocity: if the ball hasn't strayed
 // from its anchor for REST_TIME — small hops and slosh stay inside REST_RADIUS
 // — and it's on flat-enough support, it's stopped. Independent of bounciness.
-const tryRest = (ball: Ball, world: World, balls: Ball[], dt: number): void => {
+const tryRest = (
+	ball: Ball,
+	world: World,
+	balls: Ball[],
+	dt: number,
+	blockers: Obstacle[] = []
+): void => {
 	if (len(sub(ball.pos, ball.anchor)) > REST_RADIUS) {
 		ball.anchor = ball.pos;
 		ball.stillTime = 0;
 	} else {
 		ball.stillTime += dt;
-		if (ball.stillTime >= REST_TIME && onFlatSupport(ball, world, balls, REST_MARGIN)) {
+		if (ball.stillTime >= REST_TIME && onFlatSupport(ball, world, balls, REST_MARGIN, blockers)) {
 			ball.resting = true;
 			ball.vel = v(0, 0);
 		}
@@ -290,7 +312,9 @@ export const stepAll = (
 	world: World,
 	dt: number,
 	pegFromY: number,
-	pegToY: number
+	pegToY: number,
+	settle = true,
+	blockers: Obstacle[] = []
 ): void => {
 	if (dt === 0) return;
 
@@ -312,12 +336,19 @@ export const stepAll = (
 			integrate(b, h);
 			collide(b, world);
 			collideObstacles(b, world, obsVel);
+			// static blockers (resting balls fed into a prediction) — immovable circles
+			for (const o of blockers) {
+				const hit = hitObstacle(b, o);
+				if (hit) resolve(b, hit);
+			}
 		}
 		collideAllPairs(balls);
 	}
 
-	for (const b of balls) {
-		if (!b.resting) tryRest(b, world, balls, dt);
+	if (settle) {
+		for (const b of balls) {
+			if (!b.resting) tryRest(b, world, balls, dt, blockers);
+		}
 	}
 };
 
@@ -339,9 +370,13 @@ export const predictPath = (
 	y: number,
 	vx: number,
 	vy: number,
-	maxBounces: number
+	maxBounces: number,
+	blockers: Obstacle[] = []
 ): Vec[] => {
 	const ball = createBall(x, y, vx, vy);
+	// resting balls collide exactly like static pegs — fold them into the obstacle
+	// set (predictPath never sweeps obstacles, so this is safe)
+	const cw = blockers.length ? { ...world, obstacles: [...world.obstacles, ...blockers] } : world;
 	const path: Vec[] = [{ x, y }];
 	const still = v(0, 0);
 	const dt = FIXED_DT;
@@ -353,14 +388,14 @@ export const predictPath = (
 		const h = dt / substeps;
 		for (let i = 0; i < substeps && bounces < maxBounces; i++) {
 			integrate(ball, h);
-			const contact = touchingAnything(ball, world);
+			const contact = touchingAnything(ball, cw);
 			if (contact && !inContact) bounces += 1; // count each fresh impact once
 			inContact = contact;
-			collide(ball, world);
-			collideObstacles(ball, world, still);
+			collide(ball, cw);
+			collideObstacles(ball, cw, still);
 			path.push({ x: ball.pos.x, y: ball.pos.y });
 		}
-		if (ball.pos.y > world.height || ball.pos.x < 0 || ball.pos.x > world.width) break;
+		if (ball.pos.y > cw.height || ball.pos.x < 0 || ball.pos.x > cw.width) break;
 	}
 	return path;
 };
@@ -371,21 +406,23 @@ export const cupIndexAt = (world: World, x: number): number =>
 
 // Simulate a lone ghost ball from (x, y) all the way to rest and return the cup
 // index it settles in. Reuses the real step + settle logic, so it matches an
-// actual drop onto an *empty* board — balls already in play are deliberately
-// ignored (reading around them is the player's skill). Pegs are held where they
-// are now. Used to color the aim preview and glow the target slot.
+// actual drop. `blockers` are the resting balls already in play (immovable
+// circles) so the ghost bounces off / settles on the existing pile; moving balls
+// are deliberately ignored (reading around those is the player's skill). Pegs
+// are held where they are now. Used to color the aim preview and glow the slot.
 export const predictLanding = (
 	world: World,
 	x: number,
 	y: number,
 	vx: number,
-	vy: number
+	vy: number,
+	blockers: Obstacle[] = []
 ): number | null => {
 	const ghost = createBall(x, y, vx, vy);
 	const ghosts = [ghost];
 	const pegY = world.obstacles.length ? world.obstacles[0].center.y : 0;
 	for (let step = 0; step < 600; step++) {
-		stepAll(ghosts, world, FIXED_DT, pegY, pegY);
+		stepAll(ghosts, world, FIXED_DT, pegY, pegY, true, blockers);
 		if (ghost.resting) return cupIndexAt(world, ghost.pos.x);
 	}
 	return null;
@@ -509,5 +546,58 @@ export const createWorld = (
 		domes,
 		obstacles,
 		cups
+	};
+};
+
+// --- win-screen sandbox ------------------------------------------------------
+// A free-play funnel shown after a win: two mirrored ramps angle down to a gap
+// in the center; balls roll/bounce through and are wiped, so the pile drains
+// itself. Rest detection is disabled while stepping this world (the 30° ramp is
+// shallower than REST_FLATNESS, so balls would otherwise settle instead of
+// flowing) — see stepAll's `settle` flag.
+
+export const WEDGE_ANGLE = Math.PI / 6; // ramp incline from horizontal (30°)
+export const WEDGE_GAP_BALLS = 5; // center drain gap width, in ball diameters
+
+export type Wedges = {
+	floorY: number;
+	gapLeftX: number; // inner lip of the left ramp / left edge of the gap
+	gapRightX: number; // inner lip of the right ramp / right edge of the gap
+	topY: number; // ramp height where it meets the side walls
+};
+
+// Mirrored ramp geometry: each ramp runs from a side wall down to the center gap
+// at WEDGE_ANGLE. Single source for both the colliders and the drawing.
+export const wedgeGeometry = (width: number, height: number): Wedges => {
+	const halfGap = WEDGE_GAP_BALLS * BALL_RADIUS; // (balls × diameter) / 2
+	const gapLeftX = width / 2 - halfGap;
+	const topY = height - gapLeftX * Math.tan(WEDGE_ANGLE); // rise over the wall→gap run
+	return { floorY: height, gapLeftX, gapRightX: width / 2 + halfGap, topY };
+};
+
+// Bare world for the sandbox: side walls plus the two draining ramps, and no
+// floor between their inner lips — balls that reach the gap fall through (the
+// scene removes them once they're past the bottom).
+export const sandboxWorld = (width: number, height: number): World => {
+	const w = wedgeGeometry(width, height);
+	const segments: Segment[] = [
+		{ a: v(0, 0), b: v(0, height) }, // left wall
+		{ a: v(width, 0), b: v(width, height) }, // right wall
+		{ a: v(0, w.topY), b: v(w.gapLeftX, w.floorY) }, // left ramp
+		{ a: v(w.gapRightX, w.floorY), b: v(width, w.topY) } // right ramp
+	];
+	return {
+		width,
+		height,
+		railTop: height,
+		railHeight: 0,
+		cupWidth: width,
+		domeRadius: 0,
+		slotWidth: 0,
+		letterY: height,
+		segments,
+		domes: [],
+		obstacles: [],
+		cups: []
 	};
 };

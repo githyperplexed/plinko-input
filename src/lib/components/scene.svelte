@@ -10,13 +10,17 @@
 		createWorld,
 		FIXED_DT,
 		launchVelocity,
+		MAX_BALLS,
 		muzzle,
 		predictLanding,
 		predictPath,
 		railRange,
+		sandboxWorld,
 		stageOffset,
 		stepAll,
+		wedgeGeometry,
 		type Ball,
+		type Obstacle,
 		type World
 	} from "$lib/physics";
 	import { apparatus } from "$lib/stores/apparatus.svelte";
@@ -27,6 +31,7 @@
 	import { pegs } from "$lib/stores/pegs.svelte";
 
 	const DOME_FILL = "#fff";
+	const WEDGE_FILL = "#fff"; // the win-screen funnel ramps
 	const OBSTACLE_FILL = "#fff";
 	const LETTER_FILL = "rgba(255, 255, 255, 0.7)";
 	const LETTER_GREEN = "rgba(74, 222, 128, 0.95)"; // the target letter when the aim is on it
@@ -37,6 +42,7 @@
 	const TRAJECTORY_DASH_SPEED = 12; // px/sec the dots pan toward the target
 	const PEG_LINE = "rgba(255, 255, 255, 0.3)";
 	const EDGE_LINE = "rgba(255, 255, 255, 0.2)"; // light gray border at the stage edges
+	const SANDBOX_SPAWN_MS = 120; // win-screen auto-stream cadence (~8 balls/sec)
 
 	let canvas: HTMLCanvasElement;
 
@@ -53,12 +59,17 @@
 		ctx: CanvasRenderingContext2D,
 		world: World,
 		time: number,
-		correct: boolean
+		correct: boolean,
+		collideWorld: World,
+		blockers: Obstacle[]
 	): void => {
 		const rgb = correct ? TRAJECTORY_GREEN : TRAJECTORY_RGB;
 		const m = muzzle(apparatus.x, world.cupWidth, apparatus.angle);
 		const vel = launchVelocity(apparatus.angle);
-		const path = predictPath(world, m.x, m.y, vel.x, vel.y, 3);
+		// the guideline is predicted against whichever world is live — the play
+		// board, or the win-screen funnel — plus the resting balls as blockers, so
+		// it bends around the existing pile and matches what's drawn
+		const path = predictPath(collideWorld, m.x, m.y, vel.x, vel.y, 3, blockers);
 		if (path.length < 2) return;
 
 		// cumulative distance along the path (so dashes stay continuous across
@@ -119,6 +130,25 @@
 		ctx.fill();
 	};
 
+	// the win-screen funnel: two mirrored solid wedges angling down to the center
+	// drain gap (the ramp surfaces are the colliders; this just fills them in)
+	const drawWedges = (ctx: CanvasRenderingContext2D, world: World): void => {
+		const w = wedgeGeometry(world.width, world.height);
+		ctx.fillStyle = WEDGE_FILL;
+		ctx.beginPath();
+		ctx.moveTo(0, w.topY);
+		ctx.lineTo(w.gapLeftX, w.floorY);
+		ctx.lineTo(0, w.floorY);
+		ctx.closePath();
+		ctx.fill();
+		ctx.beginPath();
+		ctx.moveTo(world.width, w.topY);
+		ctx.lineTo(w.gapRightX, w.floorY);
+		ctx.lineTo(world.width, w.floorY);
+		ctx.closePath();
+		ctx.fill();
+	};
+
 	// the draggable plinko row: a thin gray line spanning the screen (to the edge
 	// handles) with the white pegs riding on it
 	const drawPegRow = (ctx: CanvasRenderingContext2D, world: World): void => {
@@ -174,6 +204,7 @@
 	$effect(() => {
 		const ctx = canvas.getContext("2d")!;
 		let world!: World;
+		let sandbox!: World; // win-screen funnel world, rebuilt on resize alongside `world`
 		let stageX = 0; // left offset of the centered play area within the window
 
 		// Size/position the canvas to the (width-capped, centered) play area and
@@ -194,6 +225,7 @@
 			// and pick a fresh target — but keep the balls and progress in play
 			if (syncCharset(sw)) newTarget();
 			world = createWorld(sw, h, charset.values);
+			sandbox = sandboxWorld(sw, h);
 			// cannon pan position: center on first run, otherwise keep it on-stage
 			const margin = world.cupWidth * CANNON_BASE_RATIO;
 			apparatus.x =
@@ -223,53 +255,100 @@
 		let last = 0;
 		let raf = 0;
 		let acc = 0; // leftover time, advanced in fixed steps
+		let lastSpawn = 0; // timestamp of the last win-screen auto-stream ball
 		const frame = (time: number): void => {
 			const dt = last ? Math.min((time - last) / 1000, 1 / 30) : 0;
 			last = time;
 
-			positionPegRow(world); // clamp the draggable row's target
+			const playing = game.status === "playing";
+			const inSandbox = game.status === "success";
+			// Which world the sim + guideline collide against: the play board; the
+			// win-screen funnel (wedges draining through a center gap); or, on a loss,
+			// a plain bare floor.
+			const simWorld = playing
+				? world
+				: inSandbox
+					? sandbox
+					: { ...world, domes: [], obstacles: [] };
+
+			if (playing) positionPegRow(world); // clamp the draggable row's target
 			// Advance the sim in fixed steps so it's frame-rate independent and
-			// repeatable — this is what makes the ball follow the preview path.
-			// Each step sweeps the pegs from where they are toward the target, so a
-			// fast drag still can't clip a ball.
+			// repeatable — this is what makes the ball follow the preview path. In the
+			// sandbox, rest detection is off (`settle: false`) so balls keep flowing
+			// down the shallow ramps and drain instead of settling into a locked pile.
 			acc += dt;
 			while (acc >= FIXED_DT) {
 				const pegFromY = world.obstacles.length ? world.obstacles[0].center.y : pegs.y;
-				stepAll(balls, world, FIXED_DT, pegFromY, pegs.y);
+				stepAll(balls, simWorld, FIXED_DT, pegFromY, playing ? pegs.y : pegFromY, !inSandbox);
 				acc -= FIXED_DT;
 			}
-			// Project each resting ball onto the pin input it owns. Done live, so a
-			// ball that re-settles in a new slot — from a resize bump, or after a
-			// removal wakes the pile — updates its own input without changing which
-			// input it owns. `game.dropped` is the slot the *next* ball will fill (a
-			// freed one if you've removed a ball), or PIN_LENGTH when full.
-			const entered = projectEntered(PIN_LENGTH, slotLetterAt);
-			for (let i = 0; i < PIN_LENGTH; i++) {
-				if (game.entered[i] !== entered[i]) game.entered[i] = entered[i];
+			if (inSandbox) {
+				// the win sandbox runs itself: the barrel is locked straight down (no
+				// aiming) and pours a steady stream from the (still-pannable) cannon
+				if (apparatus.angle !== 0) apparatus.angle = 0;
+				if (time - lastSpawn >= SANDBOX_SPAWN_MS && balls.length < MAX_BALLS) {
+					const m = muzzle(apparatus.x, world.cupWidth, 0);
+					const vel = launchVelocity(0);
+					balls.push(createBall(m.x, m.y, vel.x, vel.y));
+					lastSpawn = time;
+				}
+				// drain: a ball that has fallen through the center gap and off the
+				// bottom is wiped, which keeps the on-screen count self-limiting
+				for (let k = balls.length - 1; k >= 0; k--) {
+					if (balls[k].pos.y - balls[k].radius > world.height) balls.splice(k, 1);
+				}
 			}
-			const next = nextSlot(PIN_LENGTH) ?? PIN_LENGTH;
-			if (game.dropped !== next) game.dropped = next;
 
-			// Predicted landing for the current aim (lone ball, empty board). When it
-			// matches the next required letter, the preview goes green and the target
-			// slot glows — turning aiming into a deterministic, readable skill.
+			// resting balls are immovable circles for the predictors, so the guideline
+			// and green indicator bend around / settle on the existing pile (only in
+			// play — moving balls are left out, and there are none to read on a loss)
+			const blockers: Obstacle[] = playing
+				? balls
+						.filter((b) => b.resting)
+						.map((b) => ({ center: { x: b.pos.x, y: b.pos.y }, radius: b.radius }))
+				: [];
+
 			let glowX: number | null = null;
-			if (game.status === "playing" && game.dropped < PIN_LENGTH) {
-				const m = muzzle(apparatus.x, world.cupWidth, apparatus.angle);
-				const vel = launchVelocity(apparatus.angle);
-				const idx = predictLanding(world, m.x, m.y, vel.x, vel.y);
-				if (idx !== null && world.cups[idx].letter === game.target[game.dropped]) {
-					glowX = world.cups[idx].centerX;
+			if (playing) {
+				// Project each resting ball onto the pin input it owns. Done live, so a
+				// ball that re-settles in a new slot — from a resize bump, or after a
+				// removal wakes the pile — updates its own input without changing which
+				// input it owns. `game.dropped` is the slot the *next* ball will fill (a
+				// freed one if you've removed a ball), or PIN_LENGTH when full.
+				const entered = projectEntered(PIN_LENGTH, slotLetterAt);
+				for (let i = 0; i < PIN_LENGTH; i++) {
+					if (game.entered[i] !== entered[i]) game.entered[i] = entered[i];
+				}
+				const next = nextSlot(PIN_LENGTH) ?? PIN_LENGTH;
+				if (game.dropped !== next) game.dropped = next;
+
+				// Predicted landing for the current aim (lone ball, empty board). When
+				// it matches the next required letter, the preview goes green and the
+				// target slot glows — turning aiming into a deterministic skill.
+				if (game.dropped < PIN_LENGTH) {
+					const m = muzzle(apparatus.x, world.cupWidth, apparatus.angle);
+					const vel = launchVelocity(apparatus.angle);
+					const idx = predictLanding(world, m.x, m.y, vel.x, vel.y, blockers);
+					if (idx !== null && world.cups[idx].letter === game.target[game.dropped]) {
+						glowX = world.cups[idx].centerX;
+					}
 				}
 			}
 
 			ctx.clearRect(0, 0, world.width, world.height);
 			if (glowX !== null) drawSlotGlow(ctx, world, glowX, time);
-			drawDomes(ctx, world);
-			drawPegRow(ctx, world);
-			drawTrajectory(ctx, world, time, glowX !== null);
-			drawLetters(ctx, world, glowX);
-			for (const ball of balls) drawBall(ctx, ball);
+			// the win/lose screen clears the playfield — only the cannon's aim
+			// guideline (and the stage frame) stay alongside the result message
+			if (playing) {
+				drawDomes(ctx, world);
+				drawPegRow(ctx, world);
+			} else if (inSandbox) {
+				drawWedges(ctx, world);
+			}
+			drawTrajectory(ctx, world, time, glowX !== null, simWorld, blockers);
+			if (playing) drawLetters(ctx, world, glowX);
+			// balls render during play and in the win-screen sandbox (hidden on a loss)
+			if (game.status !== "failure") for (const ball of balls) drawBall(ctx, ball);
 			drawEdges(ctx, world);
 
 			raf = requestAnimationFrame(frame);
@@ -278,7 +357,7 @@
 
 		// fire a ball from the muzzle along the current aim
 		const fire = (): void => {
-			if (game.status !== "playing") return;
+			if (game.status !== "playing") return; // win/lose: no manual release
 			const m = muzzle(apparatus.x, world.cupWidth, apparatus.angle);
 			const vel = launchVelocity(apparatus.angle);
 			addBall(createBall(m.x, m.y, vel.x, vel.y), PIN_LENGTH); // no-op when full
@@ -302,7 +381,9 @@
 		};
 
 		const onPointerDown = (e: PointerEvent): void => {
-			// click a resting ball to remove it (and free its input slot) — no aiming
+			// win/lose screens have no manual release or aiming — only panning (which
+			// happens on move). During play: click a resting ball to remove it, else aim.
+			if (game.status !== "playing") return;
 			const hit = restingBallAt(stageX2(e.clientX), e.clientY);
 			if (hit) {
 				removeBall(hit);
@@ -319,11 +400,14 @@
 				return;
 			}
 			if (pegs.dragging) return;
-			// hover a resting ball → highlight the input it owns; else pan the cannon
 			const sx = stageX2(e.clientX);
-			const hit = restingBallAt(sx, e.clientY);
-			hover.slot = hit ? (slotFor(hit) ?? -1) : -1;
-			canvas.style.cursor = hit ? "pointer" : "";
+			if (game.status === "playing") {
+				// hover a resting ball → highlight the input it owns
+				const hit = restingBallAt(sx, e.clientY);
+				hover.slot = hit ? (slotFor(hit) ?? -1) : -1;
+				canvas.style.cursor = hit ? "pointer" : "";
+			}
+			// pan the cannon to follow the pointer
 			const margin = world.cupWidth * CANNON_BASE_RATIO;
 			apparatus.x = Math.min(Math.max(sx, margin), world.width - margin);
 			apparatus.angle = 0;

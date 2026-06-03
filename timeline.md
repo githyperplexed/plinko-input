@@ -143,10 +143,45 @@ of decisions rather than every micro-edit.
   button restyled from emerald to a faint input-shaped cell that fills solid
   white with a black arrow once every slot is settled.
 
+## 13. Honest preview — the predictors read the resting pile
+
+- The green guideline/indicator originally simulated a lone ghost on an empty
+  board, ignoring every other ball. **Decision:** now that you can click-remove
+  mistakes, make it _honest_ — feed the **resting balls** in as immovable circles
+  (a `blockers` channel threaded through `predictPath`, `predictLanding`,
+  `stepAll`, and `onFlatSupport`), so the guideline bends around the pile and
+  green only lights when the ghost _actually_ lands on target given what's there.
+- **Resting balls only** — moving balls stay ignored (transient; reading them is
+  the player's job). Cheap (≤6 circles) and keeps guideline + green consistent.
+- Mechanical note: blockers ride their own channel rather than `world.obstacles`
+  because `stepAll` rewrites every obstacle's `y` to the rail line each substep —
+  merged in, they'd have teleported onto the rail.
+
+## 14. The win screen becomes a self-running toy
+
+- **Result screen restyle:** the win message adopts the hint's layout (small
+  tracked "ACCESS GRANTED" over a larger line); the playfield is **wiped** on
+  win/lose — domes, rail bar, pegs, letters, drag handles, and balls all hidden —
+  leaving just the message, the cannon, and its guideline (which now predicts
+  against a bare floor so it reads as empty space).
+- **Free-play sandbox after a win:** drop the pin rules entirely. A win
+  `clearBalls()`es to a clean slate, then the cannon **auto-pours a steady stream**
+  (straight down, ~8 balls/sec) of unbound balls — no aiming, no manual release,
+  pan-only. Balls are capped at `MAX_BALLS` (bounds the O(n²) pass).
+- **Funnel + drain:** two mirrored **30° wedges** angle down to a center gap ~5
+  balls wide; balls roll/bounce through and are **wiped once past the bottom**, so
+  the on-screen count self-limits. **Gotcha handled:** a 30° ramp is shallower
+  than `REST_FLATNESS`, so balls would _settle_ on it and jam — the sandbox steps
+  with **rest detection off** (`stepAll(..., settle:false)`) so they always flow.
+  Geometry (`wedgeGeometry`/`sandboxWorld`) lives in physics as the single source
+  for both colliders and drawing. (Loss screen stays a plain bare floor.)
+
 ---
 
 **Throughline:** most decisions chased **"skill, not luck"** (fixed-width slots,
 deterministic preview, drop-order inputs, angle aiming, the green legibility
-preview, editable drops) and **screen-independent behavior** (fixed timestep,
-fixed slot width, responsive value sets, the too-small guards) — with a standing
-habit of **measuring before committing** (the power-meter band sweep).
+preview that grew to read the real pile, editable drops) and **screen-independent
+behavior** (fixed timestep, fixed slot width, responsive value sets, the too-small
+guards) — with a standing habit of **measuring before committing** (the
+power-meter band sweep). And once the lock is cracked, the playfield melts into a
+self-running funnel: a reward that's pure toy.
