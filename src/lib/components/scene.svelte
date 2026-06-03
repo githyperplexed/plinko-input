@@ -29,6 +29,7 @@
 	import { game, newTarget, PIN_LENGTH } from "$lib/stores/game.svelte";
 	import { hover } from "$lib/stores/hover.svelte";
 	import { pegs } from "$lib/stores/pegs.svelte";
+	import { FIRE_BAR_HEIGHT, touch } from "$lib/stores/touch.svelte";
 
 	const DOME_FILL = "#fff";
 	const WEDGE_FILL = "#fff"; // the win-screen funnel ramps
@@ -212,7 +213,10 @@
 		// geometry for the new size.
 		const resize = (): void => {
 			const dpr = window.devicePixelRatio || 1;
-			const h = window.innerHeight;
+			// on touch, reserve a bottom band for the Fire button by raising the floor:
+			// the play area is the window minus that band, so the button sits isolated
+			// below the cups (createWorld derives the whole board from this height)
+			const h = window.innerHeight - (touch.coarse ? FIRE_BAR_HEIGHT : 0);
 			const sw = clampStageWidth(window.innerWidth);
 			stageX = stageOffset(window.innerWidth);
 			canvas.width = sw * dpr;
@@ -245,6 +249,12 @@
 		// untracked so this render effect doesn't re-run when the charset swaps —
 		// the resize handler already rebuilds the world on a crossing
 		untrack(resize);
+		// re-lay out if the device's touch capability flips (mouse plugged in,
+		// devtools emulation toggled) so the reserved Fire-button band appears/clears
+		$effect(() => {
+			touch.coarse;
+			untrack(resize);
+		});
 
 		// which letter slot a settled ball came to rest in
 		const slotLetterAt = (x: number): string => {
@@ -405,6 +415,9 @@
 			}
 			// the top-panel owns the cannon while it's being grabbed — don't hover-pan over it
 			if (pegs.dragging || apparatus.panning) return;
+			// hover-pan + hover-highlight are mouse-only: on touch there's no hover, so a
+			// stray move during a tap must not yank the cannon (it's moved via the handle)
+			if (e.pointerType !== "mouse") return;
 			const sx = stageX2(e.clientX);
 			if (game.status === "playing") {
 				// hover a resting ball → highlight the input it owns
@@ -421,6 +434,9 @@
 			if (!aiming) return;
 			aiming = false;
 			apparatus.angle = aimAngle(stageX2(e.clientX), e.clientY, apparatus.x);
+			// touch decouples aim from fire: the release just locks in the aim (the arc
+			// preview stays) and the Fire button launches it. Desktop fires on release.
+			if (touch.coarse) return;
 			fire();
 			apparatus.angle = 0; // back to straight-down while panning resumes
 		};
