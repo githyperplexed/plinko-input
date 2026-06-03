@@ -82,12 +82,14 @@ export const RAIL_HEIGHT = 48; // straight-wall height of a cup, before the roun
 export const LETTER_DROP = 12; // how far the letter sits below the mound tops
 export const RAIL_HANDLE_HEIGHT = 40; // peg-rail handle height (matches its h-10)
 export const APPARATUS_RAIL_GAP = 40; // min clearance kept between cannon tip and handle top — bigger = "too small" trips sooner
-// Cannon dimensions as ratios of its (one-cup) width — all match top-panel.
-export const APPARATUS_BODY_RATIO = 0.85; // body height = release/mouth height
-export const APPARATUS_BASE_HEIGHT_RATIO = 0.75; // height of the peeking base
-export const APPARATUS_BASE_PEEK_RATIO = 0.42; // how far the base starts below the top
-// the visible tip is the bottom of that base (hangs below the mouth)
-export const APPARATUS_TIP_RATIO = APPARATUS_BASE_PEEK_RATIO + APPARATUS_BASE_HEIGHT_RATIO;
+// Cannon dimensions as ratios of its (one-cup) width — all match top-panel. The
+// cannon is a barrel pivoting on a semicircle base at top-center: 0 = straight
+// down, aimed toward the pointer and clamped to ±MAX_AIM.
+export const CANNON_BASE_RATIO = 0.5; // base semicircle radius → base width = one cup
+export const CANNON_LENGTH_RATIO = 0.7; // barrel length from pivot (top edge) to muzzle
+export const CANNON_WIDTH_RATIO = 0.34; // barrel width
+export const MAX_AIM = Math.PI / 4; // ± aim from straight down (45°)
+export const LAUNCH_SPEED = 720; // px/s the ball leaves the muzzle
 
 // --- vector helpers ---------------------------------------------------------
 
@@ -331,8 +333,15 @@ const touchingAnything = (ball: Ball, world: World): boolean => {
 // (pegs treated as fixed where they are now) and return the path it traces up to
 // and including its `maxBounces`-th impact. Deterministic, so it matches a real
 // drop from the same spot — used to draw the aim preview.
-export const predictPath = (world: World, x: number, y: number, maxBounces: number): Vec[] => {
-	const ball = createBall(x, y);
+export const predictPath = (
+	world: World,
+	x: number,
+	y: number,
+	vx: number,
+	vy: number,
+	maxBounces: number
+): Vec[] => {
+	const ball = createBall(x, y, vx, vy);
 	const path: Vec[] = [{ x, y }];
 	const still = v(0, 0);
 	const dt = FIXED_DT;
@@ -358,9 +367,9 @@ export const predictPath = (world: World, x: number, y: number, maxBounces: numb
 
 // --- construction -----------------------------------------------------------
 
-export const createBall = (x: number, y: number, radius = BALL_RADIUS): Ball => ({
+export const createBall = (x: number, y: number, vx = 0, vy = 0, radius = BALL_RADIUS): Ball => ({
 	pos: v(x, y),
-	vel: v(0, 0),
+	vel: v(vx, vy),
 	radius,
 	resting: false,
 	anchor: v(x, y),
@@ -388,17 +397,38 @@ export const railRange = (
 	return { lowest, highest };
 };
 
-// True when the cannon's visible tip reaches the top edge of the rail handle at
-// the rail's highest position — there's no longer room to keep the cannon above
-// the rail, so a ball could be dropped beneath it. Counts as "screen too small".
+// --- cannon (pan + aim-at-pointer) -------------------------------------------
+// The pivot sits at the top edge (y = 0) at `pivotX`, which pans across the top
+// while idle. The barrel hangs down by `cannonLength` and swings ±MAX_AIM toward
+// the pointer once aiming.
+
+export const cannonLength = (cupWidth: number): number => cupWidth * CANNON_LENGTH_RATIO;
+
+// Aim angle for a pointer position relative to the pivot: 0 = straight down,
+// + = toward the right.
+export const aimAngle = (pointerX: number, pointerY: number, pivotX: number): number =>
+	clamp(Math.atan2(pointerX - pivotX, Math.max(pointerY, 0)), -MAX_AIM, MAX_AIM);
+
+// Muzzle position (ball spawn / preview start) for a given pivot + aim.
+export const muzzle = (pivotX: number, cupWidth: number, angle: number): Vec => {
+	const length = cannonLength(cupWidth);
+	return v(pivotX + Math.sin(angle) * length, Math.cos(angle) * length);
+};
+
+// Launch velocity along the aim.
+export const launchVelocity = (angle: number): Vec =>
+	v(Math.sin(angle) * LAUNCH_SPEED, Math.cos(angle) * LAUNCH_SPEED);
+
+// True when the cannon's straight-down reach meets the top edge of the rail
+// handle at the rail's highest position (plus a margin) — no room to keep the
+// cannon above the rail, so a ball could be dropped beneath it: "too small".
 export const apparatusMeetsRail = (width: number, height: number, letters: string[]): boolean => {
 	const cupWidth = width / letters.length;
 	const domeRadius = domeRadiusFor(cupWidth);
 	const letterY = height - domeRadius - LETTER_DROP;
-	const mouthY = APPARATUS_BODY_RATIO * cupWidth; // release height — rail range is relative to this
-	const tipY = APPARATUS_TIP_RATIO * cupWidth; // lowest visible point of the cannon
-	const { highest } = railRange(letterY, domeRadius, mouthY);
-	return tipY >= highest - RAIL_HANDLE_HEIGHT / 2 - APPARATUS_RAIL_GAP; // handle top edge + a margin
+	const reach = cannonLength(cupWidth); // lowest the muzzle can get (straight down)
+	const { highest } = railRange(letterY, domeRadius, reach);
+	return reach >= highest - RAIL_HANDLE_HEIGHT / 2 - APPARATUS_RAIL_GAP;
 };
 
 // Build the row of domes plus the screen edges for a given viewport size, one

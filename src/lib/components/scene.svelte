@@ -2,9 +2,14 @@
 	import { untrack } from "svelte";
 
 	import {
+		aimAngle,
+		CANNON_BASE_RATIO,
+		cannonLength,
 		createBall,
 		createWorld,
 		FIXED_DT,
+		launchVelocity,
+		muzzle,
 		predictPath,
 		railRange,
 		stepAll,
@@ -28,10 +33,12 @@
 
 	let canvas: HTMLCanvasElement;
 
-	// red aim preview: the deterministic path a ball dropped now would trace
-	// through its first 3 bounces, as marching dots that fade out near the end
+	// red aim preview: the deterministic path a ball fired now would trace through
+	// its first 3 bounces, as marching dots that fade out near the end
 	const drawTrajectory = (ctx: CanvasRenderingContext2D, world: World, time: number): void => {
-		const path = predictPath(world, apparatus.x, apparatus.y, 3);
+		const m = muzzle(apparatus.x, world.cupWidth, apparatus.angle);
+		const vel = launchVelocity(apparatus.angle);
+		const path = predictPath(world, m.x, m.y, vel.x, vel.y, 3);
 		if (path.length < 2) return;
 
 		// cumulative distance along the path (so dashes stay continuous across
@@ -95,7 +102,10 @@
 	//   highest (smallest y) = the same clearance the resting row has above the
 	//                          mound tops, measured down from the apparatus mouth
 	const positionPegRow = (world: World): void => {
-		const { lowest, highest } = railRange(world.letterY, world.domeRadius, apparatus.y);
+		// reference the cannon's straight-down reach (fixed) so the rail's range
+		// doesn't shift as the cannon aims
+		const reach = cannonLength(world.cupWidth);
+		const { lowest, highest } = railRange(world.letterY, world.domeRadius, reach);
 		pegs.min = lowest;
 		pegs.max = highest;
 		if (pegs.y === 0) pegs.y = lowest; // start at rest
@@ -139,6 +149,9 @@
 			// and pick a fresh target — but keep the balls and progress in play
 			if (syncCharset(w)) newTarget();
 			world = createWorld(w, h, charset.values);
+			// cannon pan position: center on first run, otherwise keep it on-screen
+			const margin = world.cupWidth * CANNON_BASE_RATIO;
+			apparatus.x = apparatus.x === 0 ? w / 2 : Math.min(Math.max(apparatus.x, margin), w - margin);
 			// snap the rebuilt pegs to the rail's current spot so the next frame
 			// doesn't sweep them up from the default position
 			if (pegs.y > 0) for (const o of world.obstacles) o.center.y = pegs.y;
@@ -201,22 +214,53 @@
 		};
 		raf = requestAnimationFrame(frame);
 
-		// release a ball from the dispenser's current position. Bound to the canvas
-		// (not the window) so the DOM handles/cannon above it don't trigger drops —
-		// the pointer-events-none HUD still passes clicks through to here.
-		const release = (): void => {
+		// fire a ball from the muzzle along the current aim
+		const fire = (): void => {
 			if (game.status !== "playing") return;
 			if (balls.length >= PIN_LENGTH) return; // only as many balls as pin slots
-			balls.push(createBall(apparatus.x, apparatus.y));
+			const m = muzzle(apparatus.x, world.cupWidth, apparatus.angle);
+			const vel = launchVelocity(apparatus.angle);
+			balls.push(createBall(m.x, m.y, vel.x, vel.y));
+		};
+
+		// Pan + aim: while idle the cannon pans to follow the pointer (angle 0). On
+		// press it locks its position and the drag aims toward the pointer
+		// (±MAX_AIM); release fires. pointerdown is on the canvas so the DOM
+		// cannon/handles/buttons above it keep their own gestures; move/up are on
+		// the window so a drag continues off the canvas.
+		let aiming = false;
+		const onPointerDown = (e: PointerEvent): void => {
+			aiming = true;
+			apparatus.angle = aimAngle(e.clientX, e.clientY, apparatus.x);
+		};
+		const onPointerMove = (e: PointerEvent): void => {
+			if (aiming) {
+				apparatus.angle = aimAngle(e.clientX, e.clientY, apparatus.x);
+			} else if (!pegs.dragging) {
+				const margin = world.cupWidth * CANNON_BASE_RATIO;
+				apparatus.x = Math.min(Math.max(e.clientX, margin), world.width - margin);
+				apparatus.angle = 0;
+			}
+		};
+		const onPointerUp = (e: PointerEvent): void => {
+			if (!aiming) return;
+			aiming = false;
+			apparatus.angle = aimAngle(e.clientX, e.clientY, apparatus.x);
+			fire();
+			apparatus.angle = 0; // back to straight-down while panning resumes
 		};
 
 		window.addEventListener("resize", resize);
-		canvas.addEventListener("click", release);
+		canvas.addEventListener("pointerdown", onPointerDown);
+		window.addEventListener("pointermove", onPointerMove);
+		window.addEventListener("pointerup", onPointerUp);
 
 		return () => {
 			cancelAnimationFrame(raf);
 			window.removeEventListener("resize", resize);
-			canvas.removeEventListener("click", release);
+			canvas.removeEventListener("pointerdown", onPointerDown);
+			window.removeEventListener("pointermove", onPointerMove);
+			window.removeEventListener("pointerup", onPointerUp);
 		};
 	});
 </script>

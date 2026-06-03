@@ -1,58 +1,36 @@
 <script lang="ts">
-	import {
-		APPARATUS_BASE_HEIGHT_RATIO,
-		APPARATUS_BASE_PEEK_RATIO,
-		APPARATUS_BODY_RATIO
-	} from "$lib/physics";
+	import { CANNON_BASE_RATIO, CANNON_LENGTH_RATIO, CANNON_WIDTH_RATIO } from "$lib/physics";
 	import { apparatus } from "$lib/stores/apparatus.svelte";
 	import { charset } from "$lib/stores/charset.svelte";
 
 	let innerWidth = $state(0);
 
-	// The body is exactly one cup wide; every other dimension is a ratio of that
-	// width, so the cannon keeps its proportions at any window size.
-	const bodyWidth = $derived(innerWidth / charset.values.length);
-	const bodyHeight = $derived(bodyWidth * APPARATUS_BODY_RATIO);
-	const baseWidth = $derived(bodyWidth * 0.75);
-	const baseHeight = $derived(bodyWidth * APPARATUS_BASE_HEIGHT_RATIO);
-	const peek = $derived(bodyWidth * APPARATUS_BASE_PEEK_RATIO);
-	const radius = $derived(bodyWidth * 0.22);
-
-	// Left offset derived from the persisted aim fraction (clamped on screen), so
-	// the cannon keeps its position across an unmount and starts centered (0.5).
-	const x = $derived(
-		Math.min(
-			Math.max(apparatus.aim * innerWidth - bodyWidth / 2, 0),
-			Math.max(0, innerWidth - bodyWidth)
-		)
-	);
-
-	function onMouseMove(e: MouseEvent) {
-		if (innerWidth > 0) apparatus.aim = e.clientX / innerWidth;
-	}
-
-	// publish the mouth position (center x, bottom y) for the scene to read
-	$effect(() => {
-		apparatus.x = x + bodyWidth / 2;
-		apparatus.y = bodyHeight;
-	});
+	// every dimension is a ratio of one cup width, so the cannon keeps its
+	// proportions at any size; the pivot is the top-center of the screen
+	const cupWidth = $derived(innerWidth / charset.values.length);
+	const baseRadius = $derived(cupWidth * CANNON_BASE_RATIO);
+	const length = $derived(cupWidth * CANNON_LENGTH_RATIO);
+	const barrelWidth = $derived(cupWidth * CANNON_WIDTH_RATIO);
+	const barrelRadius = $derived(barrelWidth * 0.4);
+	// CSS rotates clockwise for +deg; our angle is + toward the right, so negate
+	const deg = $derived((-apparatus.angle * 180) / Math.PI);
 </script>
 
-<svelte:window bind:innerWidth onmousemove={onMouseMove} />
+<svelte:window bind:innerWidth />
 
-<div class="fixed inset-x-0 top-0">
-	<div class="absolute top-0" style="left: {x}px">
-		<div class="relative flex justify-center">
-			<!-- lower body, peeking out behind to the bottom -->
-			<div
-				class="absolute top-0 left-1/2 bg-neutral-300"
-				style="width: {baseWidth}px; height: {baseHeight}px; transform: translate(-50%, {peek}px); border-radius: 0 0 {radius}px {radius}px"
-			></div>
-			<!-- big body -->
-			<div
-				class="relative z-10 bg-white"
-				style="width: {bodyWidth}px; height: {bodyHeight}px; border-radius: 0 0 {radius}px {radius}px"
-			></div>
-		</div>
-	</div>
+<!-- pivot point: pans across the top at apparatus.x; purely visual, so it never
+	blocks the aim press (which is read off the canvas underneath) -->
+<div class="pointer-events-none fixed top-0 z-10" style="left: {apparatus.x}px">
+	<!-- barrel: hangs from the pivot and swings toward the aim -->
+	<div
+		class="absolute top-0 left-0 bg-white"
+		style="width: {barrelWidth}px; height: {length}px; margin-left: {-barrelWidth /
+			2}px; transform-origin: 50% 0; transform: rotate({deg}deg); border-radius: 0 0 {barrelRadius}px {barrelRadius}px"
+	></div>
+	<!-- base: fixed semicircle the barrel pivots on, drawn over the joint -->
+	<div
+		class="absolute top-0 left-0 bg-neutral-400"
+		style="width: {baseRadius *
+			2}px; height: {baseRadius}px; margin-left: {-baseRadius}px; border-radius: 0 0 {baseRadius}px {baseRadius}px"
+	></div>
 </div>
