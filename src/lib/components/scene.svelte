@@ -52,6 +52,9 @@
 		ctx.fillStyle = EDGE_LINE;
 		ctx.fillRect(0, 0, 2, world.height);
 		ctx.fillRect(world.width - 2, 0, 2, world.height);
+		// on touch the floor is raised to make room for the Fire button; close off
+		// the play area with a matching border along the bottom, above the button
+		if (touch.coarse) ctx.fillRect(0, world.height - 2, world.width, 2);
 	};
 
 	// red aim preview: the deterministic path a ball fired now would trace through
@@ -433,10 +436,12 @@
 		const onPointerUp = (e: PointerEvent): void => {
 			if (!aiming) return;
 			aiming = false;
-			apparatus.angle = aimAngle(stageX2(e.clientX), e.clientY, apparatus.x);
-			// touch decouples aim from fire: the release just locks in the aim (the arc
-			// preview stays) and the Fire button launches it. Desktop fires on release.
+			// Touch decouples aim from fire and keeps the aim from the last drag move:
+			// reading the release point here would let the finger's lift-off wobble nudge
+			// the angle (the precision-killer on mobile), so leave it untouched — the arc
+			// preview stays put and the Fire button launches it. Desktop fires on release.
 			if (touch.coarse) return;
+			apparatus.angle = aimAngle(stageX2(e.clientX), e.clientY, apparatus.x);
 			fire();
 			apparatus.angle = 0; // back to straight-down while panning resumes
 		};
