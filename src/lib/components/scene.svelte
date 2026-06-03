@@ -419,11 +419,19 @@
 			fire();
 			apparatus.angle = 0; // back to straight-down while panning resumes
 		};
+		// a gesture the browser/OS takes over (second finger, system swipe) cancels
+		// the aim without firing — just drop back to idle so the cannon isn't stuck
+		const onPointerCancel = (): void => {
+			if (!aiming) return;
+			aiming = false;
+			apparatus.angle = 0;
+		};
 
 		window.addEventListener("resize", resize);
 		canvas.addEventListener("pointerdown", onPointerDown);
 		window.addEventListener("pointermove", onPointerMove);
 		window.addEventListener("pointerup", onPointerUp);
+		window.addEventListener("pointercancel", onPointerCancel);
 
 		return () => {
 			cancelAnimationFrame(raf);
@@ -431,9 +439,12 @@
 			canvas.removeEventListener("pointerdown", onPointerDown);
 			window.removeEventListener("pointermove", onPointerMove);
 			window.removeEventListener("pointerup", onPointerUp);
+			window.removeEventListener("pointercancel", onPointerCancel);
 		};
 	});
 </script>
 
-<!-- the canvas IS the play area: width-capped and centered (left/size set in resize) -->
-<canvas bind:this={canvas} class="fixed top-0 left-0"></canvas>
+<!-- the canvas IS the play area: width-capped and centered (left/size set in resize).
+	 touch-none stops the browser from claiming a press-drag as a scroll/zoom gesture
+	 (which would fire pointercancel and kill the aim drag on touch devices) -->
+<canvas bind:this={canvas} class="fixed top-0 left-0 touch-none"></canvas>
