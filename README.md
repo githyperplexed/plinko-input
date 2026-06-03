@@ -1,4 +1,4 @@
-# pinko
+# pin-plinko
 
 A plinko-style "enter the pin" game. Aim the cannon, drop balls through the
 draggable peg rail, and land the target pin in the slots — then submit.

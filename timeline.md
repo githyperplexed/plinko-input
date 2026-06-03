@@ -1,4 +1,4 @@
-# pinko — build timeline
+# pin-plinko — build timeline
 
 The main steps and decision points in building the game, start to finish. Since
 several early features were replaced along the way, this reflects the real arc
