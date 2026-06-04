@@ -37,7 +37,7 @@ export const PRESETS: Record<PresetName, Settings> = {
 	// every aid on, no instant-fail — the most forgiving way to play
 	easy: {
 		guideline: true,
-		guidelineBounces: 5,
+		guidelineBounces: 3,
 		onTargetGlow: true,
 		pegs: true,
 		railHandles: true,
@@ -55,7 +55,7 @@ export const PRESETS: Record<PresetName, Settings> = {
 	// no aids, no rail control, and a single wrong ball ends the round
 	impossible: {
 		guideline: true,
-		guidelineBounces: 3,
+		guidelineBounces: 5,
 		onTargetGlow: false,
 		pegs: true,
 		railHandles: false,
