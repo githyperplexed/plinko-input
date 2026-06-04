@@ -2,9 +2,13 @@
 	import { cubicOut } from "svelte/easing";
 	import { fade, scale } from "svelte/transition";
 
+	import { game, reset } from "$lib/stores/game.svelte";
 	import {
 		MAX_BOUNCES,
 		MIN_BOUNCES,
+		PRESET_LABELS,
+		PRESET_ORDER,
+		PRESETS,
 		saveSettings,
 		settings,
 		type Settings
@@ -44,14 +48,45 @@
 				{ key: "pegs", label: "Show pegs", hint: "The row of pegs the ball bounces off" },
 				{ key: "railHandles", label: "Drag handles", hint: "Reposition the row of pegs" }
 			]
+		},
+		{
+			title: "Rules",
+			toggles: [
+				{
+					key: "instantFail",
+					label: "Instant fail",
+					hint: "Lose the round the moment a ball lands in the wrong slot"
+				}
+			]
 		}
 	];
 
 	// the rail handles are meaningless without pegs to put them on
 	const railHandlesDisabled = $derived(!draft.pegs);
 
+	// The active preset is whichever one the draft matches on every key the preset
+	// controls; null means the draft is a one-off mix, shown as "Custom". Editing
+	// any toggle below therefore flips this to Custom on its own.
+	const activePreset = $derived(
+		PRESET_ORDER.find((name) =>
+			(Object.keys(PRESETS[name]) as (keyof Settings)[]).every((k) => draft[k] === PRESETS[name][k])
+		) ?? null
+	);
+	// stamp a preset's values onto the draft (merge, so any future non-preset
+	// setting is left untouched)
+	const applyPreset = (name: keyof typeof PRESETS) => {
+		draft = { ...draft, ...PRESETS[name] };
+	};
+
 	const save = () => {
+		// Switching instant-fail ON mid-round would fail you on the spot for any ball
+		// already misplaced under the old rules — a harsh way to flip a setting. So
+		// when it's newly armed and a round is in progress, start fresh (new code,
+		// cleared board) instead of dropping straight into the failure state.
+		const armedInstantFail = !settings.instantFail && draft.instantFail;
+		const midRound = game.dropped > 0 || game.status !== "playing";
 		saveSettings(draft);
+		if (armedInstantFail && midRound) reset();
 		onClose();
 	};
 
@@ -79,14 +114,14 @@
 		transition:fade={{ duration: MS }}
 	>
 		<div
-			class="w-md max-w-full rounded-2xl border border-neutral-900 bg-black p-6 text-white"
+			class="flex max-h-full w-md max-w-full flex-col rounded-2xl border border-neutral-900 bg-black p-6 text-white"
 			role="dialog"
 			aria-modal="true"
 			aria-label="Settings"
 			tabindex="-1"
 			transition:scale={{ duration: MS, start: 0.96, opacity: 0, easing: cubicOut }}
 		>
-			<div class="flex items-center justify-between">
+			<div class="flex shrink-0 items-center justify-between">
 				<h2 class="text-lg font-medium">Settings</h2>
 				<button
 					aria-label="Close settings"
@@ -107,7 +142,40 @@
 				</button>
 			</div>
 
-			<div class="mt-5 flex flex-col gap-6">
+			<!-- only the settings list scrolls; the title row and the Save/Cancel bar
+			     stay pinned, so a short viewport can't clip them. -mr keeps the
+			     scrollbar at the panel edge while the rows keep the p-6 inset. -->
+			<div class="mt-5 -mr-3 flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pr-3">
+				<!-- difficulty presets: one click sets every toggle below. the right-hand
+				     badge names the active preset, or "Custom" once you diverge from one. -->
+				<div class="flex flex-col gap-3">
+					<h3
+						class="flex items-center gap-3 text-xs font-semibold tracking-[0.15em] text-neutral-500 uppercase"
+					>
+						Difficulty
+						<span class="h-px grow bg-neutral-700"></span>
+						<span class="font-medium tracking-normal text-neutral-400 normal-case">
+							{activePreset ? PRESET_LABELS[activePreset] : "Custom"}
+						</span>
+					</h3>
+					<div class="grid grid-cols-3 gap-2">
+						{#each PRESET_ORDER as name}
+							{@const active = activePreset === name}
+							<button
+								type="button"
+								aria-pressed={active}
+								onclick={() => applyPreset(name)}
+								class="cursor-pointer rounded-lg border py-2 text-sm font-medium transition-colors
+									{active
+									? 'border-emerald-500 bg-emerald-500 text-black'
+									: 'border-neutral-700 text-white hover:bg-white/5'}"
+							>
+								{PRESET_LABELS[name]}
+							</button>
+						{/each}
+					</div>
+				</div>
+
 				{#each sections as section}
 					<div class="flex flex-col gap-4">
 						<h3
@@ -175,7 +243,7 @@
 				{/each}
 			</div>
 
-			<div class="mt-6 flex gap-3">
+			<div class="mt-6 flex shrink-0 gap-3">
 				<button
 					class="flex-1 cursor-pointer rounded-lg border border-neutral-700 py-2 font-medium text-white hover:bg-white/5"
 					onclick={onClose}

@@ -8,6 +8,7 @@
 
 import { clearBalls } from "$lib/stores/balls";
 import { charset } from "$lib/stores/charset.svelte";
+import { settings } from "$lib/stores/settings.svelte";
 
 export const CODE_LENGTH = 6;
 
@@ -39,6 +40,20 @@ export const submit = (): void => {
 	const won = game.entered.join("") === game.target;
 	game.status = won ? "success" : "failure";
 	if (won) clearBalls(); // start the win-screen free-play sandbox with a clean slate
+};
+
+// Hard mode (instant fail): the round is lost the instant any settled ball
+// occupies a slot whose letter doesn't match the target — no need to fill the
+// whole code and submit. A no-op when hard mode is off or play has already
+// ended. Called each frame after the entered slots are re-projected.
+export const checkInstantFail = (): void => {
+	if (!settings.instantFail || game.status !== "playing") return;
+	for (let i = 0; i < CODE_LENGTH; i++) {
+		if (game.entered[i] !== "" && game.entered[i] !== game.target[i]) {
+			game.status = "failure";
+			return;
+		}
+	}
 };
 
 // Regenerate just the target — used when the value set changes at a breakpoint.

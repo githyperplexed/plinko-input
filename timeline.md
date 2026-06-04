@@ -196,6 +196,27 @@ of decisions rather than every micro-edit.
   baking one assist level in, let players dial the helpers (and difficulty) up or
   down.
 
+## 16. Difficulty — instant-fail, presets, and a scrolling dialog
+
+- Added a **Hard mode rule, "Instant fail"** (in a new _Rules_ section, default
+  off): the round is lost the instant any **settled** ball occupies a wrong slot,
+  checked live each frame after the inputs project — no need to fill the code and
+  submit. Reading off _resting_ balls means a ball merely bouncing through a wrong
+  slot mid-flight doesn't trip it.
+- **Difficulty presets** (Easy / Hard / Impossible) as a segmented control atop
+  the dialog. **Decision:** the presets are **derived, not stored** — each is a
+  full settings snapshot, the active one is whichever the toggles currently match,
+  and any other mix reads as **Custom**. So there's no separate "mode" flag that
+  can desync, and editing any toggle drops you to Custom for free. `DEFAULTS` is
+  now the Easy snapshot, so a fresh player starts on a named mode.
+- **UX guard on arming it:** switching instant-fail on mid-round would insta-fail
+  you for balls placed under the _old_ rules. **Decision:** on the off→on
+  transition, if a round is in progress, **reset to a fresh code** instead of
+  dropping into failure (an empty board is left alone — nothing to invalidate).
+- **Dialog now scrolls:** the taller content clipped top/bottom on short
+  viewports. Capped the panel to the viewport height and made it a flex column —
+  title row and Save/Cancel bar pinned, **only the settings list scrolls**.
+
 ---
 
 **Throughline:** most decisions chased **"skill, not luck"** (fixed-width slots,

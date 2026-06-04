@@ -10,6 +10,7 @@ export type Settings = {
 	onTargetGlow: boolean; // green guideline + mound glow + letter when the aim is on target
 	pegs: boolean; // the floating pegs (off also removes them as physics obstacles)
 	railHandles: boolean; // the rail line + side handles, and the ability to reposition the row
+	instantFail: boolean; // hard mode: a single ball in the wrong slot loses the round
 };
 
 export const MIN_BOUNCES = 1;
@@ -20,13 +21,50 @@ export const clampBounces = (n: number): number =>
 	Math.min(MAX_BOUNCES, Math.max(MIN_BOUNCES, Math.round(Number(n) || MIN_BOUNCES)));
 
 const STORAGE_KEY = "plinko-input:settings";
-const DEFAULTS: Settings = {
-	guideline: true,
-	guidelineBounces: 3,
-	onTargetGlow: true,
-	pegs: true,
-	railHandles: true
+
+// Difficulty presets. Each is a full snapshot of every setting, so the dialog can
+// tell which preset is active by an exact match — any other combination shows as
+// "Custom". Choosing a preset just stamps these values onto the live settings;
+// there's no separate stored "mode", so the toggles can never desync from it.
+export type PresetName = "easy" | "hard" | "impossible";
+export const PRESET_ORDER: PresetName[] = ["easy", "hard", "impossible"];
+export const PRESET_LABELS: Record<PresetName, string> = {
+	easy: "Easy",
+	hard: "Hard",
+	impossible: "Impossible"
 };
+export const PRESETS: Record<PresetName, Settings> = {
+	// every aid on, no instant-fail — the most forgiving way to play
+	easy: {
+		guideline: true,
+		guidelineBounces: 5,
+		onTargetGlow: true,
+		pegs: true,
+		railHandles: true,
+		instantFail: false
+	},
+	// aids off, but you can still reposition the rail and recover from a miss
+	hard: {
+		guideline: true,
+		guidelineBounces: 5,
+		onTargetGlow: false,
+		pegs: true,
+		railHandles: true,
+		instantFail: false
+	},
+	// no aids, no rail control, and a single wrong ball ends the round
+	impossible: {
+		guideline: true,
+		guidelineBounces: 3,
+		onTargetGlow: false,
+		pegs: true,
+		railHandles: false,
+		instantFail: true
+	}
+};
+
+// the default state is the Easy preset, so a fresh player starts on a named mode
+const DEFAULTS: Settings = { ...PRESETS.easy };
 
 // Read the saved settings, falling back to the defaults for anything missing or
 // unparseable (corrupt value, private mode, no localStorage).

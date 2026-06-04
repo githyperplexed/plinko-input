@@ -33,7 +33,7 @@
 		slotFor
 	} from "$lib/stores/balls";
 	import { charset, syncCharset } from "$lib/stores/charset.svelte";
-	import { game, newTarget, CODE_LENGTH } from "$lib/stores/game.svelte";
+	import { checkInstantFail, CODE_LENGTH, game, newTarget } from "$lib/stores/game.svelte";
 	import { hover } from "$lib/stores/hover.svelte";
 	import { pegs } from "$lib/stores/pegs.svelte";
 	import { settings } from "$lib/stores/settings.svelte";
@@ -376,6 +376,9 @@
 				}
 				const next = nextSlot(CODE_LENGTH) ?? CODE_LENGTH;
 				if (game.dropped !== next) game.dropped = next;
+
+				// hard mode: a single ball settled in the wrong slot ends the round now
+				checkInstantFail();
 
 				// Predicted landing for the current aim (lone ball, empty board). When
 				// it matches the next required letter, the preview goes green and the
