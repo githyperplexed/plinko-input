@@ -1,4 +1,4 @@
-# code-plinko
+# plinko-input
 
 A plinko-style "enter the code" game. Aim the cannon, drop balls through the
 draggable peg rail, and land the target code in the slots — then submit.

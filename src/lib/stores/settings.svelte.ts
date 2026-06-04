@@ -19,7 +19,7 @@ export const MAX_BOUNCES = 10;
 export const clampBounces = (n: number): number =>
 	Math.min(MAX_BOUNCES, Math.max(MIN_BOUNCES, Math.round(Number(n) || MIN_BOUNCES)));
 
-const STORAGE_KEY = "code-plinko:settings";
+const STORAGE_KEY = "plinko-input:settings";
 const DEFAULTS: Settings = {
 	guideline: true,
 	guidelineBounces: 3,
