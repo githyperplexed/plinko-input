@@ -1,4 +1,4 @@
-# pin-plinko — build timeline
+# code-plinko — build timeline
 
 The main steps and decision points in building the game, start to finish. Since
 several early features were replaced along the way, this reflects the real arc
@@ -40,12 +40,12 @@ of decisions rather than every micro-edit.
 
 ## 5. The game layer
 
-- Random **target pin** + 6 slots; **submit button** — explicitly _not_
+- Random **target code** + 6 slots; **submit button** — explicitly _not_
   auto-complete (Enter or click).
 - **Decision:** inputs bind to **drop order, projected live** from each ball's
   current resting slot — so settle order doesn't matter and a ball bumped to a
-  new slot (even by a resize) updates fairly. Capped balls to pin length. Added
-  hint + "new pin."
+  new slot (even by a resize) updates fairly. Capped balls to code length. Added
+  hint + "new code."
 
 ## 6. Skill tools & obstacles
 
@@ -60,7 +60,7 @@ of decisions rather than every micro-edit.
 
 - Breakpoint-based value sets: **a–z / a–r / 0–9 / 0–5** (3xl/xl/md).
   **Decision:** crossing a breakpoint swaps the board + target but **keeps the
-  balls** (only "new pin" fully resets).
+  balls** (only "new code" fully resets).
 - **Screen-too-small** message (360w / 500h + a geometric "cannon tip meets the
   rail" cutoff). **Decision:** isolate game state into a `balls` module so the
   too-small screen can unmount/**freeze and resume** without losing anything.
@@ -129,7 +129,7 @@ of decisions rather than every micro-edit.
 
 ## 12. Editable drops — click to remove, clearer inputs
 
-- **Click a resting ball to remove it**, freeing its pin slot; the next ball
+- **Click a resting ball to remove it**, freeing its code slot; the next ball
   refills that slot, reused **LIFO** (last removed → next refilled), and removing
   the last ball resets the ordering. **Decision:** decouple a ball's input
   binding from its position in the physics array — ownership lives in a
@@ -164,7 +164,7 @@ of decisions rather than every micro-edit.
   win/lose — domes, rail bar, pegs, letters, drag handles, and balls all hidden —
   leaving just the message, the cannon, and its guideline (which now predicts
   against a bare floor so it reads as empty space).
-- **Free-play sandbox after a win:** drop the pin rules entirely. A win
+- **Free-play sandbox after a win:** drop the code rules entirely. A win
   `clearBalls()`es to a clean slate, then the cannon **auto-pours a steady stream**
   (straight down, ~8 balls/sec) of unbound balls — no aiming, no manual release,
   pan-only. Balls are capped at `MAX_BALLS` (bounds the O(n²) pass).
@@ -178,7 +178,7 @@ of decisions rather than every micro-edit.
 
 ## 15. Configurable assists — the settings panel
 
-- Added a **Settings dialog** (opened from a link under the pin) that turns the
+- Added a **Settings dialog** (opened from a link under the code display) that turns the
   built-in aim helpers into **player toggles**, grouped into **Aim guideline** and
   **Peg rail** sections: show guideline, on-target highlight, show pegs, drag
   handles.

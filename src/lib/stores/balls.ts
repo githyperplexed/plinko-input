@@ -8,7 +8,7 @@ import { apparatus } from "$lib/stores/apparatus.svelte";
 // screen is shown). The reactive bridge to the UI is game.entered, which the
 // scene derives from these each frame.
 //
-// Each ball owns a pin INPUT slot for its whole life, tracked in `slotOf` and
+// Each ball owns a code INPUT slot for its whole life, tracked in `slotOf` and
 // keyed by ball identity — decoupled from the ball's position in this array, so
 // splicing one out can never re-bind another's input. Slots are handed out in
 // order; a removed slot goes onto `freed` and is reused LIFO (last removed →
@@ -76,7 +76,7 @@ export const removeBall = (ball: Ball): boolean => {
 // The input index a ball currently fills (undefined if it isn't tracked).
 export const slotFor = (ball: Ball): number | undefined => slotOf.get(ball);
 
-// Project the balls onto the pin inputs: each resting ball writes its current
+// Project the balls onto the code inputs: each resting ball writes its current
 // letter into the slot it owns; everything else stays "". `letterAt` maps an
 // x-position to its slot letter.
 export const projectEntered = (capacity: number, letterAt: (x: number) => string): string[] => {

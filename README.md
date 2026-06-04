@@ -1,7 +1,7 @@
-# pin-plinko
+# code-plinko
 
-A plinko-style "enter the pin" game. Aim the cannon, drop balls through the
-draggable peg rail, and land the target pin in the slots — then submit.
+A plinko-style "enter the code" game. Aim the cannon, drop balls through the
+draggable peg rail, and land the target code in the slots — then submit.
 
 Built with Svelte 5 (runes) + Vite + Tailwind v4. Hand-written deterministic 2D
 physics (gravity, swept collisions, ball-to-ball, a trajectory preview).

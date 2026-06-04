@@ -3,6 +3,6 @@
 >
 	<span class="text-xl font-semibold text-white">Screen too small</span>
 	<span class="text-sm text-white/50">
-		You can't enter a pin on a screen this small, you silly goose
+		You can't enter a code on a screen this small, you silly goose
 	</span>
 </div>

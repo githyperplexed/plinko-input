@@ -1,6 +1,6 @@
-// The set of values a pin can be built from, chosen by viewport width so the
+// The set of values a code can be built from, chosen by viewport width so the
 // board stays roomy as the screen shrinks. The active set drives the number of
-// cups, the cannon width, and the target pin.
+// cups, the cannon width, and the target code.
 //   ≥ 3xl       → a–z (26)
 //   xl … < 3xl  → a–r (18)
 //   md … < xl   → 0–9 (10)

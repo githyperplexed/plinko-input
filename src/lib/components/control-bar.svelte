@@ -3,7 +3,7 @@
 	import { apparatus } from "$lib/stores/apparatus.svelte";
 	import { launchBall } from "$lib/stores/balls";
 	import { charset } from "$lib/stores/charset.svelte";
-	import { game, PIN_LENGTH } from "$lib/stores/game.svelte";
+	import { game, CODE_LENGTH } from "$lib/stores/game.svelte";
 	import { FIRE_BAR_HEIGHT, touch } from "$lib/stores/touch.svelte";
 
 	let innerWidth = $state(0);
@@ -12,13 +12,13 @@
 	const stageW = $derived(clampStageWidth(innerWidth));
 	const cupWidth = $derived(stageW / charset.values.length);
 	// every slot filled → nothing left to fire
-	const ready = $derived(game.dropped < PIN_LENGTH);
+	const ready = $derived(game.dropped < CODE_LENGTH);
 
 	// Launch a ball along the cannon's current aim. Driven by the button so it never
 	// touches apparatus.x / angle — the shot fires without disturbing the arc.
 	const onFire = () => {
 		if (game.status !== "playing") return;
-		launchBall(cupWidth, PIN_LENGTH); // no-op when full
+		launchBall(cupWidth, CODE_LENGTH); // no-op when full
 	};
 
 	// Fine-aim nudge: precise on a tap, accelerating while held. A fingertip can't

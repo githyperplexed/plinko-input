@@ -19,7 +19,7 @@ export const MAX_BOUNCES = 10;
 export const clampBounces = (n: number): number =>
 	Math.min(MAX_BOUNCES, Math.max(MIN_BOUNCES, Math.round(Number(n) || MIN_BOUNCES)));
 
-const STORAGE_KEY = "pin-plinko:settings";
+const STORAGE_KEY = "code-plinko:settings";
 const DEFAULTS: Settings = {
 	guideline: true,
 	guidelineBounces: 3,
@@ -47,7 +47,7 @@ const load = (): Settings => {
 export const settings = $state<Settings>(load());
 
 // Whether the settings dialog is showing. Lives here so the trigger (under the
-// pin) and the dialog (mounted at the app root) can share it.
+// code display) and the dialog (mounted at the app root) can share it.
 export const settingsDialog = $state({ open: false });
 
 // Commit a draft into the live store and persist it (best-effort).

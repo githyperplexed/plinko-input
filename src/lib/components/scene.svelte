@@ -33,7 +33,7 @@
 		slotFor
 	} from "$lib/stores/balls";
 	import { charset, syncCharset } from "$lib/stores/charset.svelte";
-	import { game, newTarget, PIN_LENGTH } from "$lib/stores/game.svelte";
+	import { game, newTarget, CODE_LENGTH } from "$lib/stores/game.svelte";
 	import { hover } from "$lib/stores/hover.svelte";
 	import { pegs } from "$lib/stores/pegs.svelte";
 	import { settings } from "$lib/stores/settings.svelte";
@@ -365,23 +365,23 @@
 
 			let glowX: number | null = null;
 			if (playing) {
-				// Project each resting ball onto the pin input it owns. Done live, so a
+				// Project each resting ball onto the code input it owns. Done live, so a
 				// ball that re-settles in a new slot — from a resize bump, or after a
 				// removal wakes the pile — updates its own input without changing which
 				// input it owns. `game.dropped` is the slot the *next* ball will fill (a
-				// freed one if you've removed a ball), or PIN_LENGTH when full.
-				const entered = projectEntered(PIN_LENGTH, slotLetterAt);
-				for (let i = 0; i < PIN_LENGTH; i++) {
+				// freed one if you've removed a ball), or CODE_LENGTH when full.
+				const entered = projectEntered(CODE_LENGTH, slotLetterAt);
+				for (let i = 0; i < CODE_LENGTH; i++) {
 					if (game.entered[i] !== entered[i]) game.entered[i] = entered[i];
 				}
-				const next = nextSlot(PIN_LENGTH) ?? PIN_LENGTH;
+				const next = nextSlot(CODE_LENGTH) ?? CODE_LENGTH;
 				if (game.dropped !== next) game.dropped = next;
 
 				// Predicted landing for the current aim (lone ball, empty board). When
 				// it matches the next required letter, the preview goes green and the
 				// target slot glows — turning aiming into a deterministic skill. Skipped
 				// entirely when the on-target highlight is switched off.
-				if (settings.onTargetGlow && game.dropped < PIN_LENGTH) {
+				if (settings.onTargetGlow && game.dropped < CODE_LENGTH) {
 					const m = muzzle(apparatus.x, world.cupWidth, apparatus.angle);
 					const vel = launchVelocity(apparatus.angle);
 					const idx = predictLanding(simWorld, m.x, m.y, vel.x, vel.y, blockers);
@@ -415,7 +415,7 @@
 		// fire a ball from the muzzle along the current aim
 		const fire = (): void => {
 			if (game.status !== "playing") return; // win/lose: no manual release
-			launchBall(world.cupWidth, PIN_LENGTH); // no-op when full
+			launchBall(world.cupWidth, CODE_LENGTH); // no-op when full
 		};
 
 		// Pan + aim: while idle the cannon pans to follow the pointer (angle 0). On

@@ -1,16 +1,16 @@
 <script lang="ts">
-	import { game, PIN_LENGTH, reset, submit } from "$lib/stores/game.svelte";
+	import { game, CODE_LENGTH, reset, submit } from "$lib/stores/game.svelte";
 	import { hover } from "$lib/stores/hover.svelte";
 	import { settingsDialog } from "$lib/stores/settings.svelte";
 
-	const slots = Array.from({ length: PIN_LENGTH }, (_, i) => i);
+	const slots = Array.from({ length: CODE_LENGTH }, (_, i) => i);
 
 	let showHint = $state(false);
 
 	// the value the next ball you drop needs to be
 	const nextLetter = $derived(game.target[game.dropped] ?? "");
-	const hintAvailable = $derived(game.dropped < PIN_LENGTH);
-	// every slot has a settled ball → the pin can be submitted
+	const hintAvailable = $derived(game.dropped < CODE_LENGTH);
+	// every slot has a settled ball → the code can be submitted
 	const ready = $derived(game.entered.every((c) => c !== ""));
 
 	const choose = (e: MouseEvent) => {
@@ -39,7 +39,7 @@
 		settingsDialog.open = true;
 	};
 
-	// Enter submits the pin (submit() no-ops unless it's full and still playing)
+	// Enter submits the code (submit() no-ops unless it's full and still playing)
 	const onKeydown = (e: KeyboardEvent) => {
 		if (e.key === "Enter") submit();
 	};
@@ -62,7 +62,7 @@
 				<div class="flex flex-col items-center gap-1">
 					<span class="text-3xl font-semibold text-white">Access denied</span>
 					<span class="text-sm text-white/50">
-						You entered {game.entered.join("")} — the pin was {game.target}
+						You entered {game.entered.join("")} — the code was {game.target}
 					</span>
 				</div>
 			{/if}
@@ -81,7 +81,7 @@
 					{#if hintAvailable}
 						Your next letter is {nextLetter}
 					{:else}
-						Please submit your pin
+						Please submit your code
 					{/if}
 				</span>
 			</div>
@@ -93,9 +93,9 @@
 			</button>
 		</div>
 	{:else}
-		<!-- the pin the player has to reproduce -->
+		<!-- the code the player has to reproduce -->
 		<div class="flex flex-col items-center gap-2">
-			<span class="text-xs tracking-[0.3em] text-white/40 uppercase">Enter your pin</span>
+			<span class="text-xs tracking-[0.3em] text-white/40 uppercase">Enter your code</span>
 			<div class="flex gap-2 text-2xl font-medium tracking-[0.3em] text-white/70">
 				{#each game.target.split("") as letter}
 					<span>{letter}</span>
@@ -124,7 +124,7 @@
 				<!-- submit: looks like a faint input until every slot is settled, then
 					 fills solid white with a black arrow. full width on its own row at xs -->
 				<button
-					aria-label="Submit pin"
+					aria-label="Submit code"
 					disabled={!ready}
 					onclick={onSubmit}
 					class="pointer-events-auto flex h-12 w-full items-center justify-center rounded-xl border transition-colors xs:h-16 xs:w-12
@@ -152,7 +152,7 @@
 						class="pointer-events-auto cursor-pointer text-neutral-300 hover:underline"
 						onclick={choose}
 					>
-						new pin
+						new code
 					</button>
 					<!-- no next letter to reveal once every slot is filled -->
 					{#if hintAvailable}

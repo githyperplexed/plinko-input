@@ -1,7 +1,7 @@
 <script lang="ts">
 	import ControlBar from "$lib/components/control-bar.svelte";
 	import PegRail from "$lib/components/peg-rail.svelte";
-	import PinDisplay from "$lib/components/pin-display.svelte";
+	import CodeDisplay from "$lib/components/code-display.svelte";
 	import Scene from "$lib/components/scene.svelte";
 	import SettingsDialog from "$lib/components/settings-dialog.svelte";
 	import TooSmall from "$lib/components/too-small.svelte";
@@ -25,7 +25,7 @@
 	<Scene />
 	<TopPanel />
 	<PegRail />
-	<PinDisplay />
+	<CodeDisplay />
 	<ControlBar />
 
 	<SettingsDialog open={settingsDialog.open} onClose={() => (settingsDialog.open = false)} />
