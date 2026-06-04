@@ -176,6 +176,26 @@ of decisions rather than every micro-edit.
   Geometry (`wedgeGeometry`/`sandboxWorld`) lives in physics as the single source
   for both colliders and drawing. (Loss screen stays a plain bare floor.)
 
+## 15. Configurable assists — the settings panel
+
+- Added a **Settings dialog** (opened from a link under the pin) that turns the
+  built-in aim helpers into **player toggles**, grouped into **Aim guideline** and
+  **Peg rail** sections: show guideline, on-target highlight, show pegs, drag
+  handles.
+- **Decision:** toggling **pegs off removes them from the physics**, not just the
+  render — the ball falls straight past where they'd be — and the peg controls are
+  **split in two** (the pegs themselves vs. their rail line + drag handles), so the
+  rail can be hidden/locked while the pegs stay live.
+- A **collisions slider (1–10)** makes the guideline's traced bounce count
+  player-tunable (it was hardcoded at 3).
+- **Persistence + safety:** settings live in `localStorage`; the dialog edits a
+  **draft** and commits only on **Save** (Cancel / Escape / click-away discard), so
+  a half-set change never leaks into live game state — and every toggle is read
+  live each frame, so it applies mid-game without disturbing balls/progress.
+- Fits the "skill, not luck / frustrating but fair" throughline: rather than
+  baking one assist level in, let players dial the helpers (and difficulty) up or
+  down.
+
 ---
 
 **Throughline:** most decisions chased **"skill, not luck"** (fixed-width slots,

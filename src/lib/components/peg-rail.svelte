@@ -2,6 +2,7 @@
 	import { clampStageWidth, stageOffset } from "$lib/physics";
 	import { game } from "$lib/stores/game.svelte";
 	import { pegs } from "$lib/stores/pegs.svelte";
+	import { settings } from "$lib/stores/settings.svelte";
 
 	let innerWidth = $state(0);
 	// handles sit at the edges of the (capped, centered) play area
@@ -33,7 +34,8 @@
 
 <svelte:window bind:innerWidth onpointermove={onMove} onpointerup={onUp} />
 
-{#if game.status === "playing"}
+<!-- handles need pegs to ride on, so they only appear when both are switched on -->
+{#if game.status === "playing" && settings.pegs && settings.railHandles}
 	{#each handles as h}
 		<button
 			aria-label="Drag the plinko row"

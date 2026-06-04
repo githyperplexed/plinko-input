@@ -36,6 +36,7 @@
 	import { game, newTarget, PIN_LENGTH } from "$lib/stores/game.svelte";
 	import { hover } from "$lib/stores/hover.svelte";
 	import { pegs } from "$lib/stores/pegs.svelte";
+	import { settings } from "$lib/stores/settings.svelte";
 	import { FIRE_BAR_HEIGHT, touch } from "$lib/stores/touch.svelte";
 
 	const DOME_FILL = "#fff";
@@ -66,7 +67,8 @@
 	};
 
 	// red aim preview: the deterministic path a ball fired now would trace through
-	// its first 3 bounces, as marching dots that fade out near the end
+	// its first N collisions (N = settings.guidelineBounces), as marching dots that
+	// fade out near the end
 	const drawTrajectory = (
 		ctx: CanvasRenderingContext2D,
 		world: World,
@@ -80,8 +82,17 @@
 		const vel = launchVelocity(apparatus.angle);
 		// the guideline is predicted against whichever world is live — the play
 		// board, or the win-screen funnel — plus the resting balls as blockers, so
-		// it bends around the existing pile and matches what's drawn
-		const path = predictPath(collideWorld, m.x, m.y, vel.x, vel.y, 3, blockers);
+		// it bends around the existing pile and matches what's drawn. The number of
+		// collisions traced is player-configurable.
+		const path = predictPath(
+			collideWorld,
+			m.x,
+			m.y,
+			vel.x,
+			vel.y,
+			settings.guidelineBounces,
+			blockers
+		);
 		if (path.length < 2) return;
 
 		// cumulative distance along the path (so dashes stay continuous across
@@ -161,16 +172,24 @@
 		ctx.fill();
 	};
 
-	// the draggable plinko row: a thin gray line spanning the screen (to the edge
-	// handles) with the white pegs riding on it
-	const drawPegRow = (ctx: CanvasRenderingContext2D, world: World): void => {
+	// the rail line the pegs ride on: a thin gray dotted line spanning the screen to
+	// the edge handles. Part of the "rail handles" control, drawn only with them.
+	const drawPegLine = (ctx: CanvasRenderingContext2D, world: World): void => {
 		ctx.strokeStyle = PEG_LINE;
 		ctx.lineWidth = 2;
+		ctx.lineCap = "round";
+		ctx.setLineDash([0, 8]); // round dots across the rail
+		ctx.lineDashOffset = 0; // stationary — the trajectory leaves a marching offset
 		ctx.beginPath();
 		ctx.moveTo(0, pegs.y);
 		ctx.lineTo(world.width, pegs.y);
 		ctx.stroke();
+		ctx.setLineDash([]); // reset so nothing drawn afterward inherits the dash
+		ctx.lineCap = "butt";
+	};
 
+	// the white pegs the ball bounces off, riding at the rail's current height
+	const drawPegs = (ctx: CanvasRenderingContext2D, world: World): void => {
 		ctx.fillStyle = OBSTACLE_FILL;
 		for (const o of world.obstacles) {
 			ctx.beginPath();
@@ -191,6 +210,12 @@
 		const { lowest, highest } = railRange(world.letterY, world.domeRadius, reach);
 		pegs.min = lowest;
 		pegs.max = highest;
+		// without the rail handles the row can't be repositioned — it sits at its
+		// default resting spot
+		if (!settings.railHandles) {
+			pegs.y = lowest;
+			return;
+		}
 		if (pegs.y === 0) pegs.y = lowest; // start at rest
 		pegs.y = Math.min(lowest, Math.max(highest, pegs.y));
 	};
@@ -291,8 +316,12 @@
 			// Which world the sim + guideline collide against: the play board; the
 			// win-screen funnel (wedges draining through a center gap); or, on a loss,
 			// a plain bare floor.
+			// pegs off → drop the obstacles from the world the sim + predictors collide
+			// against, so the ball falls straight past where they'd be
 			const simWorld = playing
-				? world
+				? settings.pegs
+					? world
+					: { ...world, obstacles: [] }
 				: inSandbox
 					? sandbox
 					: { ...world, domes: [], obstacles: [] };
@@ -304,7 +333,7 @@
 			// down the shallow ramps and drain instead of settling into a locked pile.
 			acc += dt;
 			while (acc >= FIXED_DT) {
-				const pegFromY = world.obstacles.length ? world.obstacles[0].center.y : pegs.y;
+				const pegFromY = simWorld.obstacles.length ? simWorld.obstacles[0].center.y : pegs.y;
 				stepAll(balls, simWorld, FIXED_DT, pegFromY, playing ? pegs.y : pegFromY, !inSandbox);
 				acc -= FIXED_DT;
 			}
@@ -350,11 +379,12 @@
 
 				// Predicted landing for the current aim (lone ball, empty board). When
 				// it matches the next required letter, the preview goes green and the
-				// target slot glows — turning aiming into a deterministic skill.
-				if (game.dropped < PIN_LENGTH) {
+				// target slot glows — turning aiming into a deterministic skill. Skipped
+				// entirely when the on-target highlight is switched off.
+				if (settings.onTargetGlow && game.dropped < PIN_LENGTH) {
 					const m = muzzle(apparatus.x, world.cupWidth, apparatus.angle);
 					const vel = launchVelocity(apparatus.angle);
-					const idx = predictLanding(world, m.x, m.y, vel.x, vel.y, blockers);
+					const idx = predictLanding(simWorld, m.x, m.y, vel.x, vel.y, blockers);
 					if (idx !== null && world.cups[idx].letter === game.target[game.dropped]) {
 						glowX = world.cups[idx].centerX;
 					}
@@ -367,11 +397,12 @@
 			// guideline (and the stage frame) stay alongside the result message
 			if (playing) {
 				drawDomes(ctx, world);
-				drawPegRow(ctx, world);
+				if (settings.pegs && settings.railHandles) drawPegLine(ctx, world);
+				if (settings.pegs) drawPegs(ctx, world);
 			} else if (inSandbox) {
 				drawWedges(ctx, world);
 			}
-			drawTrajectory(ctx, world, time, glowX !== null, simWorld, blockers);
+			if (settings.guideline) drawTrajectory(ctx, world, time, glowX !== null, simWorld, blockers);
 			if (playing) drawLetters(ctx, world, glowX);
 			// balls render during play and in the win-screen sandbox (hidden on a loss)
 			if (game.status !== "failure") for (const ball of balls) drawBall(ctx, ball);

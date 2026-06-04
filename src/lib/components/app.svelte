@@ -3,8 +3,10 @@
 	import PegRail from "$lib/components/peg-rail.svelte";
 	import PinDisplay from "$lib/components/pin-display.svelte";
 	import Scene from "$lib/components/scene.svelte";
+	import SettingsDialog from "$lib/components/settings-dialog.svelte";
 	import TooSmall from "$lib/components/too-small.svelte";
 	import TopPanel from "$lib/components/top-panel.svelte";
+	import { settingsDialog } from "$lib/stores/settings.svelte";
 	import { refreshViewport, view } from "$lib/stores/view.svelte";
 
 	// keep the too-small flag in sync; the game stays mounted and just freezes
@@ -25,4 +27,6 @@
 	<PegRail />
 	<PinDisplay />
 	<ControlBar />
+
+	<SettingsDialog open={settingsDialog.open} onClose={() => (settingsDialog.open = false)} />
 {/if}

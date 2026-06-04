@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { game, PIN_LENGTH, reset, submit } from "$lib/stores/game.svelte";
 	import { hover } from "$lib/stores/hover.svelte";
+	import { settingsDialog } from "$lib/stores/settings.svelte";
 
 	const slots = Array.from({ length: PIN_LENGTH }, (_, i) => i);
 
@@ -31,6 +32,11 @@
 	const onSubmit = (e: MouseEvent) => {
 		e.stopPropagation();
 		submit();
+	};
+
+	const openSettings = (e: MouseEvent) => {
+		e.stopPropagation(); // don't also release a ball
+		settingsDialog.open = true;
 	};
 
 	// Enter submits the pin (submit() no-ops unless it's full and still playing)
@@ -75,7 +81,7 @@
 					{#if hintAvailable}
 						Your next letter is {nextLetter}
 					{:else}
-						Not available
+						Please submit your pin
 					{/if}
 				</span>
 			</div>
@@ -99,25 +105,29 @@
 
 		<!-- the player's entry, with the hint aligned to its left edge -->
 		<div class="flex flex-col gap-3">
-			<div class="flex gap-3">
-				{#each slots as i}
-					{@const correct = game.entered[i] !== "" && game.entered[i] === game.target[i]}
-					<div
-						class="flex h-16 w-12 items-center justify-center rounded-xl border text-2xl font-semibold text-white transition-colors
+			<!-- inputs in a row; the submit drops to its own full-width row below them
+				 on very narrow (xs) screens, where they no longer fit on one line -->
+			<div class="flex flex-col gap-3 xs:flex-row">
+				<div class="flex gap-3">
+					{#each slots as i}
+						{@const correct = game.entered[i] !== "" && game.entered[i] === game.target[i]}
+						<div
+							class="flex h-16 w-12 items-center justify-center rounded-xl border text-2xl font-semibold text-white transition-colors
 							{correct ? 'border-emerald-500/25' : i === game.dropped ? 'border-white/60' : 'border-white/20'}
 							{correct ? 'bg-emerald-500/5' : hover.slot === i ? 'bg-white/10' : ''}"
-					>
-						{game.entered[i] ?? ""}
-					</div>
-				{/each}
+						>
+							{game.entered[i] ?? ""}
+						</div>
+					{/each}
+				</div>
 
 				<!-- submit: looks like a faint input until every slot is settled, then
-					 fills solid white with a black arrow -->
+					 fills solid white with a black arrow. full width on its own row at xs -->
 				<button
 					aria-label="Submit pin"
 					disabled={!ready}
 					onclick={onSubmit}
-					class="pointer-events-auto flex h-16 w-12 items-center justify-center rounded-xl border transition-colors
+					class="pointer-events-auto flex h-12 w-full items-center justify-center rounded-xl border transition-colors xs:h-16 xs:w-12
 						{ready
 						? 'cursor-pointer border-white bg-white text-black'
 						: 'cursor-default border-white/20 bg-transparent text-white/30'}"
@@ -135,22 +145,35 @@
 					</svg>
 				</button>
 			</div>
-			<p class="text-sm text-neutral-500">
-				Stuck? Try a
+			<div class="flex items-center justify-between gap-4">
+				<p class="text-sm text-neutral-500">
+					Stuck? Try a
+					<button
+						class="pointer-events-auto cursor-pointer text-neutral-300 hover:underline"
+						onclick={choose}
+					>
+						new pin
+					</button>
+					<!-- no next letter to reveal once every slot is filled -->
+					{#if hintAvailable}
+						or request a
+						<button
+							class="pointer-events-auto cursor-pointer text-neutral-300 hover:underline"
+							onclick={requestHint}
+						>
+							hint
+						</button>
+					{/if}
+				</p>
+
+				<!-- opens the display/assist toggles -->
 				<button
-					class="pointer-events-auto cursor-pointer text-neutral-300 hover:underline"
-					onclick={choose}
+					class="pointer-events-auto shrink-0 cursor-pointer text-sm text-neutral-300 hover:underline"
+					onclick={openSettings}
 				>
-					new pin
+					Settings
 				</button>
-				or request a
-				<button
-					class="pointer-events-auto cursor-pointer text-neutral-300 hover:underline"
-					onclick={requestHint}
-				>
-					hint
-				</button>
-			</p>
+			</div>
 		</div>
 	{/if}
 </div>
