@@ -37,12 +37,12 @@ const onFlatSupport = (
 		const dist = len(offset);
 		if (dist <= reach && upward(offset, dist)) return true;
 	}
-	for (const d of world.domes) {
-		if (ball.pos.y > d.center.y) continue;
-		const offset = sub(ball.pos, d.center);
-		const dist = len(offset);
-		if (dist - d.radius <= reach && upward(offset, dist)) return true;
-	}
+	// Mounds are deliberately NOT settle surfaces. The slot (≥4px wider than the
+	// ball) always lets a caught ball drop to the floor between two mound bases —
+	// that's the segment check above. The only contact a mound could ever satisfy
+	// here is the unstable perch on its upper arc (the apex normal points straight
+	// up, so it would pass the flatness test); excluding mounds lets such a ball
+	// keep sliding until it drops into a slot instead of freezing on the curve.
 	// a settled ball is solid ground too — lets a ball rest on top of a pile
 	for (const other of balls) {
 		if (other === ball || !other.resting) continue;
