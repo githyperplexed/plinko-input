@@ -24,7 +24,14 @@
 		type World
 	} from "$lib/physics";
 	import { apparatus } from "$lib/stores/apparatus.svelte";
-	import { addBall, balls, nextSlot, projectEntered, removeBall, slotFor } from "$lib/stores/balls";
+	import {
+		balls,
+		launchBall,
+		nextSlot,
+		projectEntered,
+		removeBall,
+		slotFor
+	} from "$lib/stores/balls";
 	import { charset, syncCharset } from "$lib/stores/charset.svelte";
 	import { game, newTarget, PIN_LENGTH } from "$lib/stores/game.svelte";
 	import { hover } from "$lib/stores/hover.svelte";
@@ -377,9 +384,7 @@
 		// fire a ball from the muzzle along the current aim
 		const fire = (): void => {
 			if (game.status !== "playing") return; // win/lose: no manual release
-			const m = muzzle(apparatus.x, world.cupWidth, apparatus.angle);
-			const vel = launchVelocity(apparatus.angle);
-			addBall(createBall(m.x, m.y, vel.x, vel.y), PIN_LENGTH); // no-op when full
+			launchBall(world.cupWidth, PIN_LENGTH); // no-op when full
 		};
 
 		// Pan + aim: while idle the cannon pans to follow the pointer (angle 0). On
