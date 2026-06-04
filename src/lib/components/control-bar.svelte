@@ -1,14 +1,7 @@
 <script lang="ts">
-	import {
-		clampStageWidth,
-		createBall,
-		launchVelocity,
-		MAX_AIM,
-		muzzle,
-		stageOffset
-	} from "$lib/physics";
+	import { clampStageWidth, MAX_AIM, stageOffset } from "$lib/physics";
 	import { apparatus } from "$lib/stores/apparatus.svelte";
-	import { addBall } from "$lib/stores/balls";
+	import { launchBall } from "$lib/stores/balls";
 	import { charset } from "$lib/stores/charset.svelte";
 	import { game, PIN_LENGTH } from "$lib/stores/game.svelte";
 	import { FIRE_BAR_HEIGHT, touch } from "$lib/stores/touch.svelte";
@@ -21,14 +14,11 @@
 	// every slot filled → nothing left to fire
 	const ready = $derived(game.dropped < PIN_LENGTH);
 
-	// Launch a ball along the cannon's current aim. Mirrors the scene's internal
-	// fire(), but driven by the button so it never touches apparatus.x / angle —
-	// the shot fires without disturbing the arc you've lined up.
+	// Launch a ball along the cannon's current aim. Driven by the button so it never
+	// touches apparatus.x / angle — the shot fires without disturbing the arc.
 	const onFire = () => {
 		if (game.status !== "playing") return;
-		const m = muzzle(apparatus.x, cupWidth, apparatus.angle);
-		const vel = launchVelocity(apparatus.angle);
-		addBall(createBall(m.x, m.y, vel.x, vel.y), PIN_LENGTH); // no-op when full
+		launchBall(cupWidth, PIN_LENGTH); // no-op when full
 	};
 
 	// Fine-aim nudge: precise on a tap, accelerating while held. A fingertip can't
@@ -62,6 +52,12 @@
 		if (repeatTimer) clearInterval(repeatTimer);
 		holdTimer = repeatTimer = null;
 	};
+
+	// the two fine-aim arrows flanking the Fire button (chevron path + aim direction)
+	const arrows = [
+		{ dir: -1, label: "Aim left", d: "M15 18l-6-6 6-6" },
+		{ dir: 1, label: "Aim right", d: "M9 6l6 6-6 6" }
+	];
 </script>
 
 <svelte:window bind:innerWidth onpointerup={stopNudge} onpointercancel={stopNudge} />
@@ -73,40 +69,25 @@
 		class="fixed bottom-0 z-20 flex touch-none items-center gap-2 px-4 select-none"
 		style="left: {stageX}px; width: {stageW}px; height: {FIRE_BAR_HEIGHT}px"
 	>
-		<button
-			aria-label="Aim left"
-			onpointerdown={(e) => startNudge(e, -1)}
-			class="flex cursor-pointer items-center justify-center rounded-lg bg-white px-5 py-3 text-black"
-		>
-			<svg
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2.5"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				class="h-5 w-5"
+		{#each arrows as arrow}
+			<button
+				aria-label={arrow.label}
+				onpointerdown={(e) => startNudge(e, arrow.dir)}
+				class="flex cursor-pointer items-center justify-center rounded-lg bg-white px-5 py-3 text-black"
 			>
-				<path d="M15 18l-6-6 6-6" />
-			</svg>
-		</button>
-		<button
-			aria-label="Aim right"
-			onpointerdown={(e) => startNudge(e, 1)}
-			class="flex cursor-pointer items-center justify-center rounded-lg bg-white px-5 py-3 text-black"
-		>
-			<svg
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2.5"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				class="h-5 w-5"
-			>
-				<path d="M9 6l6 6-6 6" />
-			</svg>
-		</button>
+				<svg
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2.5"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					class="h-5 w-5"
+				>
+					<path d={arrow.d} />
+				</svg>
+			</button>
+		{/each}
 		<button
 			disabled={!ready}
 			onclick={onFire}

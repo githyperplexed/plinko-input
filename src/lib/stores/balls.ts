@@ -1,4 +1,5 @@
-import type { Ball } from "$lib/physics";
+import { createBall, launchVelocity, muzzle, type Ball } from "$lib/physics";
+import { apparatus } from "$lib/stores/apparatus.svelte";
 
 // The live simulation balls. Deliberately a plain module singleton (NOT $state):
 // the physics loop mutates pos/vel thousands of times per frame, so we avoid
@@ -41,6 +42,16 @@ export const addBall = (ball: Ball, capacity: number): number | null => {
 	balls.push(ball);
 	slotOf.set(ball, slot);
 	return slot;
+};
+
+// Fire a ball from the cannon along its current aim — the single source for the
+// muzzle → launch-velocity → ball recipe, shared by the desktop release-to-fire
+// and the mobile Fire button. `cupWidth` sizes the muzzle offset; `capacity` caps
+// the inputs. Returns the filled slot, or null when full.
+export const launchBall = (cupWidth: number, capacity: number): number | null => {
+	const m = muzzle(apparatus.x, cupWidth, apparatus.angle);
+	const vel = launchVelocity(apparatus.angle);
+	return addBall(createBall(m.x, m.y, vel.x, vel.y), capacity);
 };
 
 // Remove a ball — but only if it's at rest. Frees its slot for reuse and wakes

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import FireButton from "$lib/components/fire-button.svelte";
+	import ControlBar from "$lib/components/control-bar.svelte";
 	import PegRail from "$lib/components/peg-rail.svelte";
 	import PinDisplay from "$lib/components/pin-display.svelte";
 	import Scene from "$lib/components/scene.svelte";
@@ -24,5 +24,5 @@
 	<TopPanel />
 	<PegRail />
 	<PinDisplay />
-	<FireButton />
+	<ControlBar />
 {/if}
