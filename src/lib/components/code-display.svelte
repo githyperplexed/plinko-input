@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ProjectLinks from "$lib/components/project-links.svelte";
+	import { charset } from "$lib/stores/charset.svelte";
 	import { CODE_LENGTH, game, reset, submit } from "$lib/stores/game.svelte";
 	import { hover } from "$lib/stores/hover.svelte";
 	import { settingsDialog } from "$lib/stores/settings.svelte";
@@ -10,6 +11,8 @@
 
 	// the value the next ball you drop needs to be
 	const nextLetter = $derived(game.target[game.dropped] ?? "");
+	// narrow viewports use digit-only charsets, so the hint says "number" there
+	const hintNoun = $derived(/\d/.test(charset.values[0]) ? "number" : "letter");
 	const hintAvailable = $derived(game.dropped < CODE_LENGTH);
 	// every slot has a settled ball → the code can be submitted
 	const ready = $derived(game.entered.every((c) => c !== ""));
@@ -81,7 +84,7 @@
 				<span class="text-xs tracking-[0.3em] text-white/40 uppercase">Hint</span>
 				<span class="text-2xl font-medium text-white/70">
 					{#if hintAvailable}
-						Your next letter is {nextLetter}
+						Your next {hintNoun} is {nextLetter}
 					{:else}
 						Please submit your code
 					{/if}
