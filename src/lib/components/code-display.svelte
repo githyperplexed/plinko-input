@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { game, CODE_LENGTH, reset, submit } from "$lib/stores/game.svelte";
+	import ProjectLinks from "$lib/components/project-links.svelte";
+	import { CODE_LENGTH, game, reset, submit } from "$lib/stores/game.svelte";
 	import { hover } from "$lib/stores/hover.svelte";
 	import { settingsDialog } from "$lib/stores/settings.svelte";
 
@@ -53,6 +54,7 @@
 	{#if game.status !== "playing"}
 		<!-- result replaces the input content in place -->
 		<div class="flex flex-col items-center gap-4">
+			<ProjectLinks />
 			{#if game.status === "success"}
 				<div class="flex flex-col items-center gap-2">
 					<span class="text-xs tracking-[0.3em] text-white/40 uppercase">Access granted</span>
@@ -93,13 +95,17 @@
 			</button>
 		</div>
 	{:else}
-		<!-- the code the player has to reproduce -->
-		<div class="flex flex-col items-center gap-2">
-			<span class="text-xs tracking-[0.3em] text-white/40 uppercase">Enter your code</span>
-			<div class="flex gap-2 text-2xl font-medium tracking-[0.3em] text-white/70">
-				{#each game.target.split("") as letter}
-					<span>{letter}</span>
-				{/each}
+		<!-- the code the player has to reproduce, with the project links tucked above -->
+		<div class="flex flex-col items-center gap-3">
+			<ProjectLinks />
+
+			<div class="flex flex-col items-center gap-2">
+				<span class="text-xs tracking-[0.3em] text-white/40 uppercase">Enter your code</span>
+				<div class="flex gap-2 text-2xl font-medium tracking-[0.3em] text-white/70">
+					{#each game.target.split("") as letter}
+						<span>{letter}</span>
+					{/each}
+				</div>
 			</div>
 		</div>
 
