@@ -4,6 +4,7 @@
 
 	import { game, reset } from "$lib/stores/game.svelte";
 	import {
+		matchPreset,
 		MAX_BOUNCES,
 		MIN_BOUNCES,
 		PRESET_LABELS,
@@ -67,11 +68,7 @@
 	// The active preset is whichever one the draft matches on every key the preset
 	// controls; null means the draft is a one-off mix, shown as "Custom". Editing
 	// any toggle below therefore flips this to Custom on its own.
-	const activePreset = $derived(
-		PRESET_ORDER.find((name) =>
-			(Object.keys(PRESETS[name]) as (keyof Settings)[]).every((k) => draft[k] === PRESETS[name][k])
-		) ?? null
-	);
+	const activePreset = $derived(matchPreset(draft));
 	// stamp a preset's values onto the draft (merge, so any future non-preset
 	// setting is left untouched)
 	const applyPreset = (name: keyof typeof PRESETS) => {

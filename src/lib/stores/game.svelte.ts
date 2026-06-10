@@ -8,7 +8,7 @@
 
 import { clearBalls } from "$lib/stores/balls";
 import { charset } from "$lib/stores/charset.svelte";
-import { settings } from "$lib/stores/settings.svelte";
+import { matchPreset, settings } from "$lib/stores/settings.svelte";
 
 export const CODE_LENGTH = 6;
 
@@ -35,11 +35,24 @@ export const game = $state({
 // every slot has a settled value
 export const isReady = (): boolean => game.entered.every((c) => c !== "");
 
+// Fire-and-forget analytics: umami may be absent (blocked, offline) or throw —
+// either way the game must be unaffected.
+const trackWin = (): void => {
+	try {
+		window.umami?.track("win", { difficulty: matchPreset(settings) ?? "custom" });
+	} catch {
+		// no-op
+	}
+};
+
 export const submit = (): void => {
 	if (game.status !== "playing" || !isReady()) return;
 	const won = game.entered.join("") === game.target;
 	game.status = won ? "success" : "failure";
-	if (won) clearBalls(); // start the win-screen free-play sandbox with a clean slate
+	if (won) {
+		trackWin();
+		clearBalls(); // start the win-screen free-play sandbox with a clean slate
+	}
 };
 
 // Hard mode (instant fail): the round is lost the instant any settled ball

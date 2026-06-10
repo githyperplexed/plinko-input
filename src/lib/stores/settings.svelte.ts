@@ -63,6 +63,13 @@ export const PRESETS: Record<PresetName, Settings> = {
 	}
 };
 
+// The preset a settings snapshot matches on every key the preset controls, or
+// null for a one-off mix ("Custom"). Used by the dialog badge and analytics.
+export const matchPreset = (s: Settings): PresetName | null =>
+	PRESET_ORDER.find((name) =>
+		(Object.keys(PRESETS[name]) as (keyof Settings)[]).every((k) => s[k] === PRESETS[name][k])
+	) ?? null;
+
 // the default state is the Easy preset, so a fresh player starts on a named mode
 const DEFAULTS: Settings = { ...PRESETS.easy };
 
